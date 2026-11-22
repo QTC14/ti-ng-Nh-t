@@ -227,6 +227,28 @@
     }
 
     .deck-left { display: flex; align-items: center; gap: 8px; overflow: hidden; flex: 1; }
+    .deck-grip {
+      cursor: grab;
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1;
+      padding: 4px 2px;
+      flex-shrink: 0;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      letter-spacing: -2px;
+    }
+    .deck-grip:active { cursor: grabbing; }
+    .deck-item.dragging {
+      background-color: var(--pastel-yellow);
+      border: 2px solid #1E1E1E;
+      box-shadow: 3px 3px 0px #1E1E1E;
+      opacity: 0.96;
+      position: relative;
+      z-index: 5;
+      transform: scale(1.01);
+    }
     .deck-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .deck-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
     .folder-dot {
@@ -750,6 +772,10 @@
       font-weight: 700;
     }
     .lesson-dropdown-count { font-size: 11px; color: var(--text-muted); font-weight: 600; flex-shrink: 0; }
+    .shuffle-btn.active {
+      background-color: var(--pastel-green) !important;
+      border-color: #1E1E1E;
+    }
 
     /* ===== SYNC MULTI-BOOK LIST ===== */
     .book-source-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
@@ -759,6 +785,7 @@
     .sync-ctrl-btn { border: 2px solid #1E1E1E; border-radius: 12px; }
     .book-del-btn { width: 38px; height: 38px; border: 2px solid #1E1E1E; border-radius: 12px; background-color: var(--pastel-red); font-size: 15px; font-weight: 700; }
     @media (pointer: coarse) {
+      .deck-grip { padding: 8px 6px; font-size: 16px; }
       .lesson-bar .icon-btn-sm, .lesson-dropdown-btn { height: 48px; }
       .lesson-bar .icon-btn-sm { width: 48px; }
       .lesson-dropdown-btn { font-size: 14px; }
@@ -1018,6 +1045,7 @@
           <div class="lesson-dropdown-menu view-hidden" id="lessonDropdownMenu" role="listbox"></div>
         </div>
         <button type="button" class="icon-btn icon-btn-sm" id="lessonNext" title="Bài sau">›</button>
+        <button type="button" class="icon-btn icon-btn-sm shuffle-btn" id="shuffleBtn" title="Trộn ngẫu nhiên từ vựng" aria-pressed="false">🔀</button>
       </div>
       <div class="panel" id="flashcardPanel">
         <div class="breadcrumb">
@@ -1345,19 +1373,35 @@
         tx.onerror = tx.onabort = resolve;
       });
     }
-    function saveData() {
+    function persistDeckOrderLocal() {
+      const ids = appData.decks.map(d => d.id);
+      try { localStorage.setItem('soft_vocab_deck_order', JSON.stringify(ids)); } catch (e) {}
       if (!db) {
         try { localStorage.setItem('soft_vocab_v1', JSON.stringify(appData)); } catch (e) {}
-        return Promise.resolve();
       }
+      return ids;
+    }
+    function applyDeckOrder(ids) {
+      if (!Array.isArray(ids) || !ids.length) return;
+      const rank = new Map(ids.map((id, i) => [id, i]));
+      appData.decks.sort((a, b) => {
+        const ra = rank.has(a.id) ? rank.get(a.id) : 1e9;
+        const rb = rank.has(b.id) ? rank.get(b.id) : 1e9;
+        return ra - rb;
+      });
+    }
+    function saveData() {
+      const orderIds = persistDeckOrderLocal();
+      if (!db) return Promise.resolve();
       const decks = appData.decks.map((d, i) => ({ ...d, _order: i }));
       const cards = appData.cards.map(c => ({ ...c }));
       saveChain = saveChain.then(() => new Promise((resolve) => {
-        const tx = db.transaction(['decks', 'cards'], 'readwrite');
-        const ds = tx.objectStore('decks'), cs = tx.objectStore('cards');
+        const tx = db.transaction(['decks', 'cards', 'meta'], 'readwrite');
+        const ds = tx.objectStore('decks'), cs = tx.objectStore('cards'), ms = tx.objectStore('meta');
         ds.clear(); cs.clear();
         decks.forEach(d => ds.put(d));
         cards.forEach(c => cs.put(c));
+        ms.put({ key: 'deckOrder', value: JSON.stringify(orderIds) });
         tx.oncomplete = resolve;
         tx.onerror = tx.onabort = () => { toast('⚠ Không lưu được vào IndexedDB'); resolve(); };
       }));
@@ -1366,8 +1410,10 @@
     function saveVoiceCfg() { localStorage.setItem('soft_vocab_voice', JSON.stringify(voiceCfg)); }
     // Mục = tên sách; mỗi thẻ có thể thuộc 1 "bài" (lesson) bên trong sách
     let currentLesson = '';
+    let isShuffled = false;
+    let shuffledCardIds = [];
     function getBookCards() { return appData.cards.filter(c => c.deckId === currentDeckId); }
-    function getDeckCards() {
+    function getBaseDeckCards() {
       const all = getBookCards();
       if (!currentLesson) return all;
       const f = all.filter(c => (c.lesson || '') === currentLesson);
@@ -1378,6 +1424,54 @@
         return all;
       }
       return f;
+    }
+    function getDeckCards() {
+      const base = getBaseDeckCards();
+      if (!isShuffled || base.length <= 1) return base;
+      const byId = new Map(base.map(c => [c.id, c]));
+      const ordered = [];
+      const seen = new Set();
+      shuffledCardIds.forEach(id => {
+        const c = byId.get(id);
+        if (c) { ordered.push(c); seen.add(id); }
+      });
+      base.forEach(c => { if (!seen.has(c.id)) ordered.push(c); });
+      return ordered;
+    }
+    function shuffleIds(cards) {
+      const arr = cards.map(c => c.id);
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      if (arr.length >= 2 && arr.every((id, idx) => id === cards[idx].id)) {
+        [arr[0], arr[1]] = [arr[1], arr[0]];
+      }
+      return arr;
+    }
+    function updateShuffleBtn() {
+      const btn = document.getElementById('shuffleBtn');
+      if (!btn) return;
+      btn.classList.toggle('active', isShuffled);
+      btn.setAttribute('aria-pressed', isShuffled ? 'true' : 'false');
+      btn.title = isShuffled ? 'Đang trộn ngẫu nhiên (bấm để về thứ tự gốc)' : 'Trộn ngẫu nhiên từ vựng';
+    }
+    function toggleShuffle() {
+      const base = getBaseDeckCards();
+      if (base.length <= 1) {
+        isShuffled = false;
+        shuffledCardIds = [];
+        updateShuffleBtn();
+        toast('Cần ít nhất 2 thẻ để trộn');
+        return;
+      }
+      isShuffled = !isShuffled;
+      shuffledCardIds = isShuffled ? shuffleIds(base) : [];
+      currentIndex = 0;
+      isFlipped = false;
+      updateShuffleBtn();
+      renderCard();
+      toast(isShuffled ? `🔀 Đã trộn ngẫu nhiên ${base.length} thẻ` : '↩ Đã trả về thứ tự gốc');
     }
     let lessonNames = [];
     function closeLessonMenu() {
@@ -1417,7 +1511,15 @@
       const extras = [...count.keys()].filter(l => l && !seen.has(l))
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
       lessonNames = [...ordered, ...extras];
-      document.getElementById('lessonBar').classList.toggle('view-hidden', lessonNames.length === 0);
+      const hasLessons = lessonNames.length > 0;
+      const bar = document.getElementById('lessonBar');
+      bar.classList.toggle('view-hidden', !hasLessons && all.length <= 1);
+      bar.style.justifyContent = hasLessons ? '' : 'flex-end';
+      document.getElementById('lessonPrev').classList.toggle('view-hidden', !hasLessons);
+      document.getElementById('lessonDropdown').classList.toggle('view-hidden', !hasLessons);
+      document.getElementById('lessonNext').classList.toggle('view-hidden', !hasLessons);
+      document.getElementById('shuffleBtn').classList.toggle('view-hidden', all.length <= 1 && !hasLessons);
+      updateShuffleBtn();
 
       const currentLabel = currentLesson
         ? `${currentLesson} (${count.get(currentLesson) || 0})`
@@ -1443,6 +1545,8 @@
     }
     function setLesson(name) {
       currentLesson = name;
+      isShuffled = false;
+      shuffledCardIds = [];
       currentIndex = 0;
       isFlipped = false;
       closeLessonMenu();
@@ -1627,6 +1731,7 @@
       renderAll();
     };
 
+    let suppressDeckClick = false;
     function renderSidebar() {
       const deckList = document.getElementById('deckList');
       deckList.innerHTML = '';
@@ -1636,8 +1741,10 @@
         const done = cards.filter(c => c.mastered).length;
         const item = document.createElement('div');
         item.className = 'deck-item' + (deck.id === currentDeckId ? ' active' : '');
+        item.dataset.deckId = deck.id;
         item.innerHTML = `
           <div class="deck-left">
+            <span class="deck-grip" title="Kéo để sắp xếp">⋮⋮</span>
             <span class="folder-dot" style="background:${deck.color}"></span>
             <span class="deck-name-text" title="${esc(deck.name)}">${esc(deck.name)}</span>
           </div>
@@ -1647,9 +1754,12 @@
             <button class="deck-mini-btn del" title="Xóa mục" onclick="deleteDeckById(event, '${deck.id}')">✕</button>
           </div>
         `;
-        item.onclick = () => {
+        item.onclick = (e) => {
+          if (suppressDeckClick || e.target.closest('.deck-grip')) return;
           currentDeckId = deck.id;
           currentLesson = '';
+          isShuffled = false;
+          shuffledCardIds = [];
           currentIndex = 0;
           isFlipped = false;
           renderAll();
@@ -1666,6 +1776,116 @@
         `<option value="${d.id}" ${d.id === currentDeckId ? 'selected' : ''}>${esc(d.name)}</option>`
       ).join('');
     }
+
+    // Kéo thả sắp xếp thứ tự Bộ từ vựng (chuột + chạm-giữ-kéo cảm ứng)
+    (function setupDeckReorder() {
+      const list = document.getElementById('deckList');
+      let dragEl = null, dragging = false, startY = 0, holdTimer = null, initialOrder = [];
+
+      function startDrag(item) {
+        if (dragging || !item) return;
+        dragEl = item;
+        dragging = true;
+        suppressDeckClick = true;
+        initialOrder = Array.from(list.querySelectorAll('.deck-item')).map(el => el.dataset.deckId);
+        dragEl.classList.add('dragging');
+        if (navigator.vibrate) navigator.vibrate(10);
+      }
+
+      function moveDrag(clientY) {
+        if (!dragging || !dragEl) return;
+        const lr = list.getBoundingClientRect();
+        if (clientY < lr.top + 32) list.scrollTop -= 10;
+        else if (clientY > lr.bottom - 32) list.scrollTop += 10;
+
+        const siblings = Array.from(list.querySelectorAll('.deck-item'));
+        for (const el of siblings) {
+          if (el === dragEl) continue;
+          const r = el.getBoundingClientRect();
+          const mid = r.top + r.height / 2;
+          if (clientY > mid && (el.compareDocumentPosition(dragEl) & Node.DOCUMENT_POSITION_PRECEDING)) {
+            el.after(dragEl);
+            break;
+          }
+          if (clientY < mid && (dragEl.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING)) {
+            el.before(dragEl);
+            break;
+          }
+        }
+      }
+
+      async function endDrag() {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+        if (!dragging || !dragEl) { dragEl = null; return; }
+        dragEl.classList.remove('dragging');
+        const newIds = Array.from(list.querySelectorAll('.deck-item')).map(el => el.dataset.deckId);
+        const changed = newIds.some((id, idx) => id !== initialOrder[idx]);
+        dragEl = null;
+        dragging = false;
+        setTimeout(() => { suppressDeckClick = false; }, 120);
+        if (changed) {
+          applyDeckOrder(newIds);
+          await saveData();
+          renderSidebar();
+        }
+      }
+
+      // Chuột trên máy tính
+      let mouseItem = null;
+      list.addEventListener('mousedown', (e) => {
+        if (e.button !== 0 || e.target.closest('.deck-mini-btn')) return;
+        const item = e.target.closest('.deck-item');
+        if (!item) return;
+        mouseItem = item;
+        startY = e.clientY;
+        if (e.target.closest('.deck-grip')) {
+          e.preventDefault();
+          startDrag(item);
+        }
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!mouseItem && !dragging) return;
+        if (!dragging && mouseItem && Math.abs(e.clientY - startY) > 6) {
+          startDrag(mouseItem);
+        }
+        if (dragging) {
+          e.preventDefault();
+          moveDrag(e.clientY);
+        }
+      });
+      window.addEventListener('mouseup', () => {
+        mouseItem = null;
+        endDrag();
+      });
+
+      // Cảm ứng trên điện thoại (kéo ngay ở ⋮⋮ hoặc chạm-giữ 220ms trên mục)
+      list.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1 || e.target.closest('.deck-mini-btn')) return;
+        const item = e.target.closest('.deck-item');
+        if (!item) return;
+        startY = e.touches[0].clientY;
+        if (e.target.closest('.deck-grip')) {
+          e.preventDefault();
+          startDrag(item);
+        } else {
+          clearTimeout(holdTimer);
+          holdTimer = setTimeout(() => startDrag(item), 220);
+        }
+      }, { passive: false });
+      list.addEventListener('touchmove', (e) => {
+        if (!e.touches.length) return;
+        const y = e.touches[0].clientY;
+        if (!dragging) {
+          if (Math.abs(y - startY) > 8) { clearTimeout(holdTimer); holdTimer = null; }
+          return;
+        }
+        e.preventDefault();
+        moveDrag(y);
+      }, { passive: false });
+      list.addEventListener('touchend', endDrag);
+      list.addEventListener('touchcancel', endDrag);
+    })();
 
     // ===== RENDER FLASHCARD =====
     function renderCard() {
@@ -2676,6 +2896,7 @@
     });
     $('lessonPrev').onclick = () => stepLesson(-1);
     $('lessonNext').onclick = () => stepLesson(1);
+    $('shuffleBtn').onclick = toggleShuffle;
     $('openDataBtn').onclick = () => { closeDrawer(); openDataModal(); };
     $('openDataFromManage').onclick = openDataModal;
     $('closeDataModalBtn').onclick = closeDataModal;
@@ -2877,6 +3098,15 @@
         if (!hasLegacy) await metaSet('needFirstSync', '1');
       }
       if (applySamplePatch()) await saveData();
+
+      let savedOrder = await metaGet('deckOrder');
+      if (!savedOrder) {
+        try { savedOrder = localStorage.getItem('soft_vocab_deck_order'); } catch (e) {}
+      }
+      if (typeof savedOrder === 'string') {
+        try { savedOrder = JSON.parse(savedOrder); } catch (e) { savedOrder = null; }
+      }
+      if (Array.isArray(savedOrder) && savedOrder.length) applyDeckOrder(savedOrder);
 
       lastId = appData.cards.reduce((m, c) => (typeof c.id === 'number' && c.id > m ? c.id : m), 0);
       let rawBooks = await metaGet('sheetBooks');

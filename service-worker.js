@@ -1,5 +1,5 @@
 /* Vocab PWA service worker — offline-first */
-const VERSION = 'v4';
+const VERSION = 'v5';
 const APP_CACHE = `vocab-app-${VERSION}`;
 const RUNTIME_CACHE = `vocab-runtime-${VERSION}`;
 
