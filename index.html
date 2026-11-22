@@ -698,8 +698,73 @@
       .panel { padding: 16px; }
     }
 
-    .lesson-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
-    .lesson-bar .form-select { flex: 1; min-width: 0; font-weight: 700; }
+    .lesson-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; position: relative; z-index: 25; }
+    .lesson-bar .icon-btn-sm {
+      width: 42px; height: 42px;
+      background-color: #FBF8F1;
+      border: 2px solid #1E1E1E;
+      border-radius: 12px;
+      box-shadow: 3px 3px 0px #1E1E1E;
+      font-size: 17px; font-weight: 700;
+    }
+    .lesson-bar .icon-btn-sm:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0px #1E1E1E; }
+    .lesson-dropdown { flex: 1; min-width: 0; position: relative; }
+    .lesson-dropdown-btn {
+      width: 100%; height: 42px; padding: 0 12px;
+      background-color: #FBF8F1;
+      border: 2px solid #1E1E1E;
+      border-radius: 12px;
+      box-shadow: 3px 3px 0px #1E1E1E;
+      font-family: inherit; font-size: 13px; font-weight: 700; color: var(--text-main);
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      cursor: pointer; text-align: left;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    .lesson-dropdown-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0px #1E1E1E; }
+    .lesson-dropdown-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lesson-dropdown-caret { flex-shrink: 0; font-size: 12px; transition: transform 0.15s ease; }
+    .lesson-dropdown.open .lesson-dropdown-caret { transform: rotate(180deg); }
+    .lesson-dropdown-menu {
+      position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      background-color: #FBF8F1;
+      border: 2px solid #1E1E1E;
+      border-radius: 12px;
+      box-shadow: 3px 3px 0px #1E1E1E;
+      padding: 6px;
+      max-height: 260px; overflow-y: auto;
+      z-index: 35;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .lesson-dropdown-item {
+      width: 100%; text-align: left; font-family: inherit; font-size: 13px; font-weight: 600;
+      color: var(--text-main); background: transparent;
+      border: 1.5px solid transparent; border-radius: 9px;
+      padding: 9px 10px; cursor: pointer;
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .lesson-dropdown-item:hover { background-color: rgba(0, 0, 0, 0.04); }
+    .lesson-dropdown-item.active {
+      background-color: var(--pastel-green);
+      border-color: #1E1E1E;
+      font-weight: 700;
+    }
+    .lesson-dropdown-count { font-size: 11px; color: var(--text-muted); font-weight: 600; flex-shrink: 0; }
+
+    /* ===== SYNC MULTI-BOOK LIST ===== */
+    .book-source-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+    .book-source-row { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.35fr) auto; gap: 6px; align-items: center; }
+    .sync-ctrl-input { border: 2px solid #1E1E1E; border-radius: 12px; background-color: #FBF8F1; min-width: 0; }
+    .sync-ctrl-input:focus { background-color: #FFFFFF; }
+    .sync-ctrl-btn { border: 2px solid #1E1E1E; border-radius: 12px; }
+    .book-del-btn { width: 38px; height: 38px; border: 2px solid #1E1E1E; border-radius: 12px; background-color: var(--pastel-red); font-size: 15px; font-weight: 700; }
+    @media (pointer: coarse) {
+      .lesson-bar .icon-btn-sm, .lesson-dropdown-btn { height: 48px; }
+      .lesson-bar .icon-btn-sm { width: 48px; }
+      .lesson-dropdown-btn { font-size: 14px; }
+      .lesson-dropdown-item { padding: 12px; font-size: 14px; }
+      .book-del-btn { width: 48px; height: 48px; }
+    }
 
     /* ===== TOAST / OVERLAY / DATA MODAL ===== */
     .toast {
@@ -903,15 +968,13 @@
       <div class="data-sec">
         <h4>☁ Đồng bộ Google Sheets (Apps Script)</h4>
         <p>
-          Dán duy nhất link <b>Google Apps Script Web App</b> (đuôi <code>/exec</code>). Khi bấm <b>Sync ngay</b>, app tự tải toàn bộ các tab bài học (Bài 1, Bài 2…) và từ vựng mới nhất, tự tạo thanh chọn bài mà vẫn giữ nguyên tiến độ học cũ.
+          Thêm từng cuốn sách với link <b>Google Apps Script Web App</b> (đuôi <code>/exec</code>). Khi bấm <b>Sync ngay</b>, mỗi link tạo thành một mục sách riêng bên menu trái, các tab bên trong thành danh sách bài học của cuốn sách đó (giữ nguyên tiến độ cũ).
         </p>
-        <label class="form-label">Tên mục lớn (gộp toàn bộ tab Google Sheets vào đây)</label>
-        <input class="form-input" id="bookNameInput" placeholder="VD: Từ vựng Google Sheets" style="margin-bottom:10px;" />
-        <label class="form-label">Link Google Apps Script Web App (hoặc CSV)</label>
-        <input class="form-input" id="sheetUrlInput" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec" />
+        <div class="book-source-list" id="bookSourceList"></div>
+        <button type="button" class="btn sync-ctrl-btn" id="addBookRowBtn" style="width:100%; background:var(--pastel-yellow);">＋ Thêm sách</button>
         <div class="row-btns">
-          <button class="btn" id="saveSheetBtn">💾 Lưu link</button>
-          <button class="btn btn-primary" id="syncNowBtn"><span class="sync-icon">⟳</span> Sync ngay</button>
+          <button type="button" class="btn sync-ctrl-btn" id="saveSheetBtn" style="background:#FBF8F1;">💾 Lưu link</button>
+          <button type="button" class="btn btn-primary sync-ctrl-btn" id="syncNowBtn"><span class="sync-icon">⟳</span> Sync ngay</button>
         </div>
         <div class="subtitle-line" id="lastSyncText" style="margin:8px 0 0; font-size:12px;"></div>
       </div>
@@ -946,9 +1009,15 @@
     <!-- VIEW 1: STUDY -->
     <section id="studyView">
       <div class="lesson-bar view-hidden" id="lessonBar">
-        <button class="icon-btn icon-btn-sm" id="lessonPrev" title="Bài trước">‹</button>
-        <select class="form-select" id="lessonSelect" aria-label="Chọn bài"></select>
-        <button class="icon-btn icon-btn-sm" id="lessonNext" title="Bài sau">›</button>
+        <button type="button" class="icon-btn icon-btn-sm" id="lessonPrev" title="Bài trước">‹</button>
+        <div class="lesson-dropdown" id="lessonDropdown">
+          <button type="button" class="lesson-dropdown-btn" id="lessonDropdownBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="Chọn bài">
+            <span class="lesson-dropdown-label" id="lessonDropdownLabel">Tất cả bài (0)</span>
+            <span class="lesson-dropdown-caret">▾</span>
+          </button>
+          <div class="lesson-dropdown-menu view-hidden" id="lessonDropdownMenu" role="listbox"></div>
+        </div>
+        <button type="button" class="icon-btn icon-btn-sm" id="lessonNext" title="Bài sau">›</button>
       </div>
       <div class="panel" id="flashcardPanel">
         <div class="breadcrumb">
@@ -1311,6 +1380,28 @@
       return f;
     }
     let lessonNames = [];
+    function closeLessonMenu() {
+      const dd = document.getElementById('lessonDropdown');
+      const menu = document.getElementById('lessonDropdownMenu');
+      const btn = document.getElementById('lessonDropdownBtn');
+      if (dd) dd.classList.remove('open');
+      if (menu) menu.classList.add('view-hidden');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+    function toggleLessonMenu() {
+      const menu = document.getElementById('lessonDropdownMenu');
+      const dd = document.getElementById('lessonDropdown');
+      const btn = document.getElementById('lessonDropdownBtn');
+      if (!menu || !dd) return;
+      const willOpen = menu.classList.contains('view-hidden');
+      menu.classList.toggle('view-hidden', !willOpen);
+      dd.classList.toggle('open', willOpen);
+      if (btn) btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (willOpen) {
+        const active = menu.querySelector('.lesson-dropdown-item.active');
+        if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest' });
+      }
+    }
     function renderLessonBar() {
       getDeckCards(); // tự reset bài nếu không còn thuộc sách này
       const all = getBookCards();
@@ -1327,16 +1418,34 @@
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
       lessonNames = [...ordered, ...extras];
       document.getElementById('lessonBar').classList.toggle('view-hidden', lessonNames.length === 0);
-      const sel = document.getElementById('lessonSelect');
-      sel.innerHTML = `<option value="">Tất cả bài (${all.length})</option>` +
-        lessonNames.map(n => `<option value="${esc(n)}">${esc(n)} (${count.get(n) || 0})</option>`).join('');
-      sel.value = currentLesson;
+
+      const currentLabel = currentLesson
+        ? `${currentLesson} (${count.get(currentLesson) || 0})`
+        : `Tất cả bài (${all.length})`;
+      document.getElementById('lessonDropdownLabel').textContent = currentLabel;
+
+      const options = [{ value: '', label: 'Tất cả bài', cnt: all.length }]
+        .concat(lessonNames.map(n => ({ value: n, label: n, cnt: count.get(n) || 0 })));
+      const menu = document.getElementById('lessonDropdownMenu');
+      menu.innerHTML = options.map(opt => {
+        const active = opt.value === currentLesson;
+        return `<button type="button" role="option" aria-selected="${active}" class="lesson-dropdown-item${active ? ' active' : ''}" data-lesson="${esc(opt.value)}"><span>${esc(opt.label)}</span><span class="lesson-dropdown-count">(${opt.cnt})</span></button>`;
+      }).join('');
+      menu.querySelectorAll('.lesson-dropdown-item').forEach(item => {
+        item.onclick = (e) => {
+          e.stopPropagation();
+          closeLessonMenu();
+          setLesson(item.dataset.lesson || '');
+        };
+      });
+
       document.getElementById('lessonList').innerHTML = lessonNames.map(n => `<option value="${esc(n)}"></option>`).join('');
     }
     function setLesson(name) {
       currentLesson = name;
       currentIndex = 0;
       isFlipped = false;
+      closeLessonMenu();
       renderLessonBar();
       renderCard();
     }
@@ -2298,7 +2407,7 @@
       }
     }
 
-    // ---------- GOOGLE SHEETS / APPS SCRIPT SYNC ----------
+    // ---------- GOOGLE SHEETS / APPS SCRIPT SYNC (NHIỀU SÁCH) ----------
     const DEFAULT_BOOK = 'Từ vựng Google Sheets';
     const OLD_DEFAULT_BOOKS = ['Google Sheets', 'Từ vựng Tiếng Nhật - Anh'];
     const DEFAULT_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzaHsOiM-zhT7uQ9ZO9hKkJyHFpM1EvK-8xRQeBBdWh3OxSjRqtT1Y6i-I3Zp2CkboN/exec';
@@ -2306,13 +2415,11 @@
       'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnct0ssuMfWTSYhg0PCMJ9GO9IzL3BT3gpwMqF4nA_EJ_6yAhcXuILwYH3lfs713xlUMe6dYlDYQZ0/pub?gid=0&single=true&output=csv',
       'Bài 1 | https://docs.google.com/spreadsheets/d/e/2PACX-1vTnct0ssuMfWTSYhg0PCMJ9GO9IzL3BT3gpwMqF4nA_EJ_6yAhcXuILwYH3lfs713xlUMe6dYlDYQZ0/pub?gid=0&single=true&output=csv'
     ];
-    let bookName = DEFAULT_BOOK;
-    let sheetUrl = '';
+    let sheetBooks = [];
 
     function normalizeSheetUrl(u) {
       u = (u || '').trim();
       if (!u) return '';
-      // Giữ tương thích nếu người dùng từng lưu dạng "Tên bài | link"
       const bar = u.lastIndexOf('|');
       if (bar >= 0 && /https?:\/\//i.test(u.slice(bar + 1))) u = u.slice(bar + 1).trim();
       const edit = u.match(/docs\.google\.com\/spreadsheets\/d\/([^/]+)\/(?:edit|view)/);
@@ -2327,19 +2434,62 @@
       return u;
     }
 
-    // Tìm hoặc tạo 1 mục tổng duy nhất cho Google Sheets và gom các mục tách lẻ cũ (nếu có) vào chung
-    async function ensureSingleSheetDeck(book, lessons) {
-      const targetLower = book.toLowerCase();
-      const savedSyncedId = await metaGet('syncedDeckId');
-      let targetDeck = (savedSyncedId && appData.decks.find(d => d.id === savedSyncedId))
-        || appData.decks.find(d => d.name.trim().toLowerCase() === targetLower)
-        || appData.decks.find(d => OLD_DEFAULT_BOOKS.some(b => b.toLowerCase() === d.name.trim().toLowerCase()));
+    function collectBookRowsFromUI() {
+      const container = $('bookSourceList');
+      if (!container) return;
+      const rows = Array.from(container.querySelectorAll('.book-source-row'));
+      if (!rows.length && container.dataset.rendered !== '1') return;
+      sheetBooks = rows.map((row, idx) => ({
+        id: row.dataset.id || ('bk_' + Date.now() + '_' + idx),
+        name: row.querySelector('.book-name-in')?.value.trim() || '',
+        url: row.querySelector('.book-url-in')?.value.trim() || '',
+        deckId: row.dataset.deckId || ''
+      }));
+    }
+
+    function renderBookRows() {
+      const container = $('bookSourceList');
+      if (!container) return;
+      container.dataset.rendered = '1';
+      if (!sheetBooks.length) {
+        container.innerHTML = '<div style="font-size:12px; color:var(--text-muted); padding:8px 0;">Chưa có sách nào — bấm <b>＋ Thêm sách</b> để thêm link Apps Script.</div>';
+        return;
+      }
+      container.innerHTML = sheetBooks.map((b, idx) => `
+        <div class="book-source-row" data-id="${esc(b.id || ('bk_' + idx))}" data-deck-id="${esc(b.deckId || '')}">
+          <input class="form-input sync-ctrl-input book-name-in" type="text" placeholder="Tên sách" value="${esc(b.name || '')}" aria-label="Tên sách ${idx + 1}" />
+          <input class="form-input sync-ctrl-input book-url-in" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec" value="${esc(b.url || '')}" aria-label="Link Apps Script ${idx + 1}" />
+          <button type="button" class="icon-btn icon-btn-sm book-del-btn" data-idx="${idx}" title="Xóa sách này">×</button>
+        </div>
+      `).join('');
+      container.querySelectorAll('.book-del-btn').forEach(btn => {
+        btn.onclick = () => {
+          collectBookRowsFromUI();
+          const idx = parseInt(btn.dataset.idx, 10);
+          if (!Number.isNaN(idx)) sheetBooks.splice(idx, 1);
+          renderBookRows();
+        };
+      });
+    }
+
+    async function saveSheetBooksMeta() {
+      await metaSet('sheetBooks', JSON.stringify(sheetBooks));
+    }
+
+    // Tìm hoặc tạo đúng 1 Mục lớn (Deck) cho cuốn sách tương ứng; gom tab tách lẻ cũ nếu là sách duy nhất
+    async function ensureDeckForBook(bookEntry, bookTitle, lessons, canConsolidateLegacy) {
+      const targetLower = bookTitle.toLowerCase();
+      let targetDeck = (bookEntry.deckId && appData.decks.find(d => d.id === bookEntry.deckId))
+        || appData.decks.find(d => d.name.trim().toLowerCase() === targetLower);
+      if (!targetDeck && canConsolidateLegacy) {
+        targetDeck = appData.decks.find(d => OLD_DEFAULT_BOOKS.some(b => b.toLowerCase() === d.name.trim().toLowerCase()));
+      }
 
       let created = false;
       if (!targetDeck) {
         targetDeck = {
           id: 'deck_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-          name: book,
+          name: bookTitle,
           color: DECK_COLORS[appData.decks.length % DECK_COLORS.length],
           lang: 'ja-JP',
           lessons: []
@@ -2347,119 +2497,154 @@
         appData.decks.push(targetDeck);
         created = true;
       } else {
-        targetDeck.name = book;
+        targetDeck.name = bookTitle;
       }
-
-      // Gom các mục con cũ bị tách theo từng tab (hoặc tên sách mặc định cũ) vào chung 1 mục tổng
-      const lessonLowerSet = new Set(lessons.map(l => String(l || '').trim().toLowerCase()).filter(Boolean));
-      const oldBookSet = new Set(OLD_DEFAULT_BOOKS.map(b => b.toLowerCase()));
-      const decksToMerge = appData.decks.filter(d => {
-        if (d.id === targetDeck.id) return false;
-        const dName = d.name.trim().toLowerCase();
-        if (dName === targetLower || oldBookSet.has(dName)) return true;
-        if (lessonLowerSet.has(dName) && d.id !== 'n2' && d.id !== 'kaiwa') return true;
-        return false;
-      });
+      bookEntry.deckId = targetDeck.id;
 
       const removedDeckIds = new Set();
-      if (decksToMerge.length) {
-        const existingMap = new Map();
-        appData.cards.forEach(c => {
-          if (c.deckId === targetDeck.id) existingMap.set((c.lesson || '') + '|' + c.word, c);
-        });
-        const mergeIds = new Set(decksToMerge.map(d => d.id));
-        const deckNameById = Object.fromEntries(decksToMerge.map(d => [d.id, d.name.trim()]));
-        const keptCards = [];
+      if (canConsolidateLegacy) {
+        const protectedIds = new Set(['n2', 'kaiwa', targetDeck.id, ...sheetBooks.map(b => b.deckId).filter(Boolean)]);
+        const protectedNames = new Set(sheetBooks.map(b => (b.name || '').trim().toLowerCase()).filter(n => n && n !== targetLower));
+        const lessonLowerSet = new Set(lessons.map(l => String(l || '').trim().toLowerCase()).filter(Boolean));
+        const oldBookSet = new Set(OLD_DEFAULT_BOOKS.map(b => b.toLowerCase()));
 
-        appData.cards.forEach(c => {
-          if (!mergeIds.has(c.deckId)) { keptCards.push(c); return; }
-          const srcName = deckNameById[c.deckId] || '';
-          const srcLower = srcName.toLowerCase();
-          const lesson = c.lesson || (srcLower === targetLower || oldBookSet.has(srcLower) ? '' : srcName);
-          const key = lesson + '|' + c.word;
-          const dup = existingMap.get(key);
-          if (dup) {
-            if (c.mastered && !dup.mastered) { dup.mastered = c.mastered; dup.level = c.level; }
-          } else {
-            c.deckId = targetDeck.id;
-            c.lesson = lesson;
-            existingMap.set(key, c);
-            keptCards.push(c);
-          }
+        const decksToMerge = appData.decks.filter(d => {
+          if (d.id === targetDeck.id || protectedIds.has(d.id)) return false;
+          const dName = d.name.trim().toLowerCase();
+          if (protectedNames.has(dName)) return false;
+          if (dName === targetLower || oldBookSet.has(dName)) return true;
+          if (lessonLowerSet.has(dName)) return true;
+          return false;
         });
-        appData.cards = keptCards;
-        decksToMerge.forEach(d => removedDeckIds.add(d.id));
-        appData.decks = appData.decks.filter(d => !removedDeckIds.has(d.id));
+
+        if (decksToMerge.length) {
+          const existingMap = new Map();
+          appData.cards.forEach(c => {
+            if (c.deckId === targetDeck.id) existingMap.set((c.lesson || '') + '|' + c.word, c);
+          });
+          const mergeIds = new Set(decksToMerge.map(d => d.id));
+          const deckNameById = Object.fromEntries(decksToMerge.map(d => [d.id, d.name.trim()]));
+          const keptCards = [];
+
+          appData.cards.forEach(c => {
+            if (!mergeIds.has(c.deckId)) { keptCards.push(c); return; }
+            const srcName = deckNameById[c.deckId] || '';
+            const srcLower = srcName.toLowerCase();
+            const lesson = c.lesson || (srcLower === targetLower || oldBookSet.has(srcLower) ? '' : srcName);
+            const key = lesson + '|' + c.word;
+            const dup = existingMap.get(key);
+            if (dup) {
+              if (c.mastered && !dup.mastered) { dup.mastered = c.mastered; dup.level = c.level; }
+            } else {
+              c.deckId = targetDeck.id;
+              c.lesson = lesson;
+              existingMap.set(key, c);
+              keptCards.push(c);
+            }
+          });
+          appData.cards = keptCards;
+          decksToMerge.forEach(d => removedDeckIds.add(d.id));
+          appData.decks = appData.decks.filter(d => !removedDeckIds.has(d.id));
+        }
       }
 
-      await metaSet('syncedDeckId', targetDeck.id);
       return { targetDeck, created, removedDeckIds };
     }
 
     let syncing = false;
     async function syncSheet(isFirstAuto = false) {
-      const url = normalizeSheetUrl(sheetUrl);
-      if (!url) { openDataModal(); toast('Dán link Apps Script Web App (/exec) rồi bấm Sync'); return; }
+      collectBookRowsFromUI();
+      const validBooks = sheetBooks.filter(b => normalizeSheetUrl(b.url));
+      if (!validBooks.length) { openDataModal(); toast('Thêm ít nhất 1 sách có link Apps Script (/exec) rồi bấm Sync'); return; }
       if (!navigator.onLine) { toast('📴 Đang offline — cần có mạng để Sync. Dữ liệu offline vẫn dùng bình thường.'); return; }
       if (syncing) return;
       syncing = true;
       document.querySelectorAll('.sync-icon').forEach(e => e.classList.add('spin'));
       try {
-        const sep = url.includes('?') ? '&' : '?';
-        const res = await fetch(url + sep + '_=' + Date.now());
-        if (!res.ok) throw new Error('HTTP ' + res.status + ' — kiểm tra lại link Web App');
-        const text = await res.text();
-        if (/^\s*<(!doctype|html)/i.test(text)) {
-          const errMatch = text.match(/(?:ReferenceError|TypeError|SyntaxError|Error|Exception):[^<]+/i);
-          if (errMatch) throw new Error('Lỗi Apps Script: ' + errMatch[0].replace(/&quot;/g, '"').trim());
-          if (/accounts\.google\.com/i.test(text)) throw new Error('Web App chưa đặt quyền truy cập "Bất kỳ ai" (Anyone)');
-          throw new Error('Link trả về trang HTML thay vì JSON — kiểm tra lại Google Apps Script');
-        }
-
-        const book = (bookName || DEFAULT_BOOK).trim();
-        const ct = (res.headers.get('content-type') || '').toLowerCase();
-        const trimmed = text.trim();
-        const isJson = ct.includes('json') || trimmed.startsWith('{') || trimmed.startsWith('[');
-
-        let lessons = [];
-        let records = [];
-
-        if (isJson) {
-          const parsed = JSON.parse(trimmed.replace(/^\uFEFF/, ''));
-          const payload = gasPayloadToRecords(parsed, book, true);
-          lessons = payload.lessons;
-          records = payload.records;
-        } else {
-          records = csvToRecords(text).map(r => ({
-            ...r,
-            lesson: r.lesson || r.deck || undefined,
-            deck: book
-          }));
-          records.forEach(r => { if (r.lesson && !lessons.includes(r.lesson)) lessons.push(r.lesson); });
-        }
-
         const wasFirstSync = isFirstAuto === true || (await metaGet('needFirstSync')) === '1';
-        const { targetDeck, created, removedDeckIds } = await ensureSingleSheetDeck(book, lessons);
-        const stat = mergeRecords(records, book, { singleBook: true, targetDeck });
-        if (created) stat.decksAdded++;
+        const total = { added: 0, updated: 0, skipped: 0, decksAdded: 0 };
+        const failed = [];
+        const allRemoved = new Set();
+        let totalLessons = 0;
+        let firstSyncedDeck = null;
 
-        if (lessons.length) targetDeck.lessons = lessons;
+        for (let i = 0; i < validBooks.length; i++) {
+          const bookEntry = validBooks[i];
+          const url = normalizeSheetUrl(bookEntry.url);
+          const bookTitle = (bookEntry.name || '').trim() || (validBooks.length === 1 ? DEFAULT_BOOK : `Sách ${i + 1}`);
+          bookEntry.name = bookTitle;
+          try {
+            const sep = url.includes('?') ? '&' : '?';
+            const res = await fetch(url + sep + '_=' + Date.now());
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const text = await res.text();
+            if (/^\s*<(!doctype|html)/i.test(text)) {
+              const errMatch = text.match(/(?:ReferenceError|TypeError|SyntaxError|Error|Exception):[^<]+/i);
+              if (errMatch) throw new Error('Lỗi Apps Script: ' + errMatch[0].replace(/&quot;/g, '"').trim());
+              if (/accounts\.google\.com/i.test(text)) throw new Error('Web App chưa đặt quyền truy cập "Bất kỳ ai" (Anyone)');
+              throw new Error('Link trả về trang HTML thay vì JSON');
+            }
 
-        // Mở thẳng mục tổng khi Sync lần đầu hoặc khi mục cũ vừa được gộp vào mục tổng
-        if (wasFirstSync || removedDeckIds.has(currentDeckId) || !appData.decks.some(d => d.id === currentDeckId)) {
-          currentDeckId = targetDeck.id;
+            const ct = (res.headers.get('content-type') || '').toLowerCase();
+            const trimmed = text.trim();
+            const isJson = ct.includes('json') || trimmed.startsWith('{') || trimmed.startsWith('[');
+
+            let lessons = [];
+            let records = [];
+            if (isJson) {
+              const parsed = JSON.parse(trimmed.replace(/^\uFEFF/, ''));
+              const payload = gasPayloadToRecords(parsed, bookTitle, true);
+              lessons = payload.lessons;
+              records = payload.records;
+            } else {
+              records = csvToRecords(text).map(r => ({
+                ...r,
+                lesson: r.lesson || r.deck || undefined,
+                deck: bookTitle
+              }));
+              records.forEach(r => { if (r.lesson && !lessons.includes(r.lesson)) lessons.push(r.lesson); });
+            }
+
+            const { targetDeck, created, removedDeckIds } = await ensureDeckForBook(bookEntry, bookTitle, lessons, validBooks.length === 1);
+            removedDeckIds.forEach(id => allRemoved.add(id));
+            const s = mergeRecords(records, bookTitle, { singleBook: true, targetDeck });
+            if (created) s.decksAdded++;
+            if (lessons.length) targetDeck.lessons = lessons;
+
+            totalLessons += lessons.length;
+            Object.keys(total).forEach(k => total[k] += s[k]);
+            if (!firstSyncedDeck) firstSyncedDeck = targetDeck;
+          } catch (err) {
+            console.error(err);
+            failed.push(`${bookTitle}: ${err.message || err}`);
+          }
+        }
+
+        if (firstSyncedDeck && (wasFirstSync || allRemoved.has(currentDeckId) || !appData.decks.some(d => d.id === currentDeckId))) {
+          currentDeckId = firstSyncedDeck.id;
           currentLesson = '';
           currentIndex = 0;
           isFlipped = false;
         }
 
+        await saveSheetBooksMeta();
         await saveData();
-        await metaSet('lastSync', new Date().toLocaleString('vi-VN'));
-        await metaSet('needFirstSync', '0');
+        if (!failed.length) {
+          await metaSet('lastSync', new Date().toLocaleString('vi-VN'));
+          await metaSet('needFirstSync', '0');
+        }
+        renderBookRows();
         renderAll();
         refreshDataStats();
-        const lessonInfo = lessons.length ? ` (${lessons.length} bài)` : '';
-        toast(`✅ Sync xong${lessonInfo}: ${statText(stat)}`);
+
+        if (failed.length === validBooks.length) {
+          toast(`⚠ Sync lỗi: ${failed[0]}`);
+        } else if (failed.length) {
+          toast(`⚠ ${failed.length}/${validBooks.length} sách lỗi (${failed[0]}). ${statText(total)}`);
+        } else {
+          const info = totalLessons ? ` (${validBooks.length} sách, ${totalLessons} bài)` : ` (${validBooks.length} sách)`;
+          toast(`✅ Sync xong${info}: ${statText(total)}`);
+        }
       } catch (err) {
         console.error(err);
         toast('⚠ Sync lỗi: ' + (err.message || err));
@@ -2475,43 +2660,52 @@
       $('lastSyncText').textContent = last ? `Lần sync gần nhất: ${last}` : 'Chưa sync lần nào.';
     }
     async function openDataModal() {
-      $('sheetUrlInput').value = sheetUrl;
-      $('bookNameInput').value = bookName;
+      renderBookRows();
       await refreshDataStats();
       $('dataModal').classList.remove('view-hidden');
     }
     function closeDataModal() { $('dataModal').classList.add('view-hidden'); }
 
     $('syncBtn').onclick = () => syncSheet(false);
-    $('lessonSelect').onchange = (e) => setLesson(e.target.value);
+    $('lessonDropdownBtn').onclick = (e) => { e.stopPropagation(); toggleLessonMenu(); };
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#lessonDropdown')) closeLessonMenu();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeLessonMenu();
+    });
     $('lessonPrev').onclick = () => stepLesson(-1);
     $('lessonNext').onclick = () => stepLesson(1);
     $('openDataBtn').onclick = () => { closeDrawer(); openDataModal(); };
     $('openDataFromManage').onclick = openDataModal;
     $('closeDataModalBtn').onclick = closeDataModal;
     $('dataModal').addEventListener('click', (e) => { if (e.target === $('dataModal')) closeDataModal(); });
+    $('addBookRowBtn').onclick = () => {
+      collectBookRowsFromUI();
+      sheetBooks.push({ id: 'bk_' + Date.now(), name: '', url: '', deckId: '' });
+      renderBookRows();
+      const inputs = $('bookSourceList').querySelectorAll('.book-name-in');
+      if (inputs.length) inputs[inputs.length - 1].focus();
+    };
     $('syncNowBtn').onclick = async () => {
-      sheetUrl = $('sheetUrlInput').value.trim();
-      bookName = $('bookNameInput').value.trim() || DEFAULT_BOOK;
-      await metaSet('sheetUrl', sheetUrl);
-      await metaSet('bookName', bookName);
+      collectBookRowsFromUI();
+      await saveSheetBooksMeta();
       syncSheet(false);
     };
     $('saveSheetBtn').onclick = async () => {
-      const prevBook = bookName;
-      sheetUrl = $('sheetUrlInput').value.trim();
-      bookName = $('bookNameInput').value.trim() || DEFAULT_BOOK;
-      await metaSet('sheetUrl', sheetUrl);
-      await metaSet('bookName', bookName);
-      const sid = await metaGet('syncedDeckId');
-      const sd = (sid && appData.decks.find(d => d.id === sid))
-        || appData.decks.find(d => d.name.trim().toLowerCase() === prevBook.trim().toLowerCase());
-      if (sd && sd.name !== bookName && !appData.decks.some(d => d.id !== sd.id && d.name.trim().toLowerCase() === bookName.toLowerCase())) {
-        sd.name = bookName;
-        await saveData();
-        renderAll();
-      }
-      toast('💾 Đã lưu cấu hình Google Sheets');
+      collectBookRowsFromUI();
+      let renamed = false;
+      sheetBooks.forEach(b => {
+        if (!b.deckId || !b.name) return;
+        const d = appData.decks.find(x => x.id === b.deckId);
+        if (d && d.name !== b.name && !appData.decks.some(x => x.id !== d.id && x.name.trim().toLowerCase() === b.name.toLowerCase())) {
+          d.name = b.name;
+          renamed = true;
+        }
+      });
+      await saveSheetBooksMeta();
+      if (renamed) { await saveData(); renderAll(); }
+      toast('💾 Đã lưu danh sách sách & link Sync');
     };
 
     // ---------- NHẬP FILE (chọn file + kéo thả) ----------
@@ -2685,15 +2879,27 @@
       if (applySamplePatch()) await saveData();
 
       lastId = appData.cards.reduce((m, c) => (typeof c.id === 'number' && c.id > m ? c.id : m), 0);
-      sheetUrl = (await metaGet('sheetUrl')) || DEFAULT_SHEET_URL;
-      if (OLD_DEFAULT_URLS.includes(sheetUrl.trim())) {
-        sheetUrl = DEFAULT_SHEET_URL;
-        await metaSet('sheetUrl', sheetUrl);
+      let rawBooks = await metaGet('sheetBooks');
+      if (typeof rawBooks === 'string') {
+        try { rawBooks = JSON.parse(rawBooks); } catch (e) { rawBooks = null; }
       }
-      bookName = (await metaGet('bookName')) || DEFAULT_BOOK;
-      if (bookName === 'Từ vựng Tiếng Nhật - Anh' && (await metaGet('migratedSingleBook')) !== '1') {
-        bookName = DEFAULT_BOOK;
-        await metaSet('bookName', bookName);
+      if (Array.isArray(rawBooks) && rawBooks.length) {
+        sheetBooks = rawBooks.map((b, i) => ({
+          id: b.id || ('bk_' + i),
+          name: b.name || '',
+          url: OLD_DEFAULT_URLS.includes((b.url || '').trim()) ? DEFAULT_SHEET_URL : (b.url || ''),
+          deckId: b.deckId || ''
+        }));
+      } else {
+        let legacyUrl = (await metaGet('sheetUrl')) || DEFAULT_SHEET_URL;
+        if (OLD_DEFAULT_URLS.includes(legacyUrl.trim())) legacyUrl = DEFAULT_SHEET_URL;
+        let legacyName = (await metaGet('bookName')) || DEFAULT_BOOK;
+        if (legacyName === 'Từ vựng Tiếng Nhật - Anh' && (await metaGet('migratedSingleBook')) !== '1') {
+          legacyName = DEFAULT_BOOK;
+        }
+        const legacyDeckId = (await metaGet('syncedDeckId')) || '';
+        sheetBooks = [{ id: 'bk_1', name: legacyName, url: legacyUrl, deckId: legacyDeckId }];
+        await saveSheetBooksMeta();
       }
       await metaSet('migratedSingleBook', '1');
       currentDeckId = appData.decks[0]?.id || '';

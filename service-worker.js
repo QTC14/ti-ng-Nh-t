@@ -1,5 +1,5 @@
 /* Vocab PWA service worker — offline-first */
-const VERSION = 'v3';
+const VERSION = 'v4';
 const APP_CACHE = `vocab-app-${VERSION}`;
 const RUNTIME_CACHE = `vocab-runtime-${VERSION}`;
 
@@ -63,10 +63,15 @@ self.addEventListener('fetch', (event) => {
 
   if (url.origin !== self.location.origin) return;
 
-  // Mở trang: luôn phục vụ index.html từ cache (offline OK)
+  // Mở trang: ưu tiên mạng (Network-First) để luôn nhận bản index.html mới nhất, offline thì lấy cache
   if (req.mode === 'navigate') {
     event.respondWith(
-      staleWhileRevalidate(event, APP_CACHE, './index.html').then((res) => res || caches.match('./index.html'))
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) caches.open(APP_CACHE).then((c) => c.put('./index.html', res.clone()));
+          return res;
+        })
+        .catch(() => caches.match('./index.html'))
     );
     return;
   }
