@@ -1,0 +1,2319 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#F7F5EE" />
+  <meta name="description" content="Flashcard từ vựng JP + EN + VI, hoạt động offline." />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Vocab" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <title>Vocab Design — JP + EN + VI Flashcards</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Roboto+Slab:wght@600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-page: #F7F5EE;
+      --bg-card: #FFFFFF;
+      --bg-soft: #FBF9F4;
+      --border: #1E1E1E;
+      --border-light: #D7D2C5;
+      --text-main: #1A1A1A;
+      --text-muted: #5F5C55;
+      --pastel-yellow: #FCECC9;
+      --pastel-green: #C9E8C4;
+      --pastel-purple: #E5DCF7;
+      --pastel-red: #FAD4D4;
+      --pastel-blue: #D3E6FA;
+      --accent: #C9E8C4;
+      --shadow-sm: 2px 2px 0px #1E1E1E;
+      --shadow-md: 3px 3px 0px #1E1E1E;
+    }
+
+    body.mode-en { --accent: #D3E6FA; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== TOP HEADER ===== */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background-color: var(--bg-page);
+      border-bottom: 1.5px solid var(--border-light);
+      padding: 12px 16px;
+    }
+
+    .topbar-inner {
+      max-width: 680px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 19px;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-highlight {
+      background-color: var(--accent);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    .lang-chip {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-card);
+    }
+
+    .icon-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border);
+      background-color: var(--bg-card);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.15s;
+      font-family: inherit;
+      font-size: 15px;
+      color: var(--text-main);
+      flex-shrink: 0;
+    }
+
+    .icon-btn:active {
+      transform: translate(2px, 2px);
+      box-shadow: 0 0 0 var(--border);
+    }
+
+    .icon-btn-sm {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      font-size: 13px;
+      box-shadow: 1.5px 1.5px 0px var(--border);
+    }
+
+    .speaker-btn { background-color: var(--pastel-yellow); }
+    .speaker-btn:hover { background-color: var(--pastel-green); }
+    .speaker-btn-en { background-color: var(--bg-card); }
+    .speaker-btn-en:hover { background-color: var(--pastel-yellow); }
+
+    .topbar-actions { display: flex; gap: 8px; }
+
+    /* ===== SIDEBAR DRAWER ===== */
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(26, 26, 26, 0.35);
+      z-index: 40;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+
+    .drawer {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: 325px;
+      max-width: 88vw;
+      background-color: var(--bg-page);
+      border-right: 1.5px solid var(--border);
+      z-index: 50;
+      transform: translateX(-100%);
+      transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+    }
+    .drawer.open { transform: translateX(0); }
+
+    .drawer-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding-bottom: 14px;
+      border-bottom: 1.5px solid var(--border-light);
+      margin-bottom: 14px;
+    }
+
+    .tab-btn {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1.5px solid transparent;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      color: var(--text-main);
+    }
+
+    .tab-btn.active {
+      background-color: var(--accent);
+      border-color: var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .drawer-section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .deck-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-right: 2px;
+    }
+
+    .deck-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1.5px solid transparent;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .deck-item:hover { background-color: rgba(0, 0, 0, 0.04); }
+    .deck-item.active {
+      background-color: var(--accent);
+      border-color: var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .deck-left { display: flex; align-items: center; gap: 8px; overflow: hidden; flex: 1; }
+    .deck-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .deck-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+    .folder-dot {
+      width: 13px; height: 10px;
+      border-radius: 3px;
+      border: 1.2px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .deck-mini-btn {
+      width: 24px; height: 24px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      font-size: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .deck-mini-btn:hover { background: var(--pastel-yellow); }
+    .deck-mini-btn.del:hover { background: var(--pastel-red); }
+
+    .deck-form-box {
+      background: var(--bg-card);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .color-picker-row { display: flex; gap: 6px; margin: 8px 0 10px; }
+    .color-swatch {
+      width: 24px; height: 24px;
+      border-radius: 6px;
+      border: 1.5px solid var(--border);
+      cursor: pointer;
+    }
+    .color-swatch.selected { outline: 2px solid var(--border); outline-offset: 2px; }
+
+    .drawer-footer {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1.5px solid var(--border-light);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .progress-box {
+      background-color: var(--bg-card);
+      border: 1.5px solid var(--border-light);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    /* ===== MAIN CONTAINER ===== */
+    .main {
+      flex: 1;
+      width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 16px 16px 104px;
+    }
+
+    .panel {
+      background-color: var(--bg-card);
+      border: 1.5px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: var(--shadow-md);
+      margin-bottom: 14px;
+    }
+
+    .breadcrumb {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .word-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .word-title {
+      font-family: 'Roboto Slab', serif;
+      font-size: 34px;
+      font-weight: 800;
+      line-height: 1.25;
+      color: var(--text-main);
+      word-break: break-word;
+    }
+
+    .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .pill {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 999px;
+      border: 1.5px solid var(--border);
+      box-shadow: 1.5px 1.5px 0px var(--border);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .pill-yellow { background-color: var(--pastel-yellow); }
+    .pill-accent { background-color: var(--accent); }
+    .pill-purple { background-color: var(--pastel-purple); }
+
+    .subtitle-line {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    /* ===== BENTO GRID ===== */
+    .bento-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 520px) { .bento-grid { grid-template-columns: 1fr 1fr; } }
+
+    .bento-card {
+      background-color: var(--bg-soft);
+      border: 1.5px solid var(--border-light);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .bento-card.revealed { background-color: var(--bg-card); border-color: var(--border); }
+
+    .bento-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+
+    .bento-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+      word-break: break-word;
+    }
+
+    /* ===== NOTEBOOK BOX ===== */
+    .notebook-box {
+      background-color: var(--bg-soft);
+      background-image: radial-gradient(#D5D0C3 1px, transparent 1px);
+      background-size: 14px 14px;
+      border: 1.5px solid var(--border-light);
+      border-radius: 14px;
+      padding: 18px;
+    }
+    .notebook-box.revealed { border-color: var(--border); }
+
+    /* Lưới 2 cột: Nghĩa tiếng Việt (xanh lá) + Tiếng Anh (xanh dương) */
+    .meaning-en-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .meaning-en-grid.single-col {
+      grid-template-columns: 1fr;
+    }
+    @media (max-width: 560px) {
+      .meaning-en-grid { grid-template-columns: 1fr; }
+    }
+
+    .meaning-box {
+      background-color: var(--pastel-green);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .english-box {
+      background-color: var(--pastel-blue);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .meaning-main {
+      font-family: 'Roboto Slab', serif;
+      font-size: 19px;
+      font-weight: 700;
+      line-height: 1.3;
+      margin-top: 2px;
+    }
+
+    .en-ipa {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .example-block {
+      margin-bottom: 12px;
+    }
+
+    .example-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .example-sentence {
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.6;
+      flex: 1;
+    }
+
+    .example-trans {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      padding-top: 5px;
+      border-top: 1px dashed #C7C2B4;
+    }
+
+    .en-example-wrap {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: rgba(211, 230, 250, 0.45);
+      border: 1.2px dashed var(--border);
+      border-radius: 10px;
+    }
+
+    .hidden-placeholder {
+      text-align: center;
+      padding: 28px 10px;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .notebook-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(30, 30, 30, 0.08);
+    }
+
+    .legend { display: flex; gap: 12px; font-size: 12px; color: var(--text-muted); }
+    .legend-dot {
+      display: inline-block;
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      border: 1.5px solid var(--border);
+      margin-right: 4px;
+    }
+
+    /* ===== STEP TRACKER ===== */
+    .step-panel {
+      background-color: var(--bg-card);
+      border: 1.5px solid var(--border-light);
+      border-radius: 16px;
+      padding: 14px 18px;
+    }
+    .step-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .step-circles {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 2px 0 4px;
+    }
+    .step-node {
+      flex-shrink: 0;
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      border: 1.5px solid var(--border-light);
+      background-color: var(--bg-card);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--text-muted);
+    }
+    .step-node.done { background-color: var(--pastel-yellow); border-color: var(--border); color: var(--text-main); }
+    .step-node.current {
+      background-color: var(--accent);
+      border-color: var(--border);
+      color: var(--text-main);
+      box-shadow: 1.5px 1.5px 0px var(--border);
+    }
+
+    /* ===== BOTTOM BAR ===== */
+    .bottom-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background-color: var(--bg-page);
+      border-top: 1.5px solid var(--border-light);
+      padding: 12px 16px;
+      z-index: 20;
+    }
+    .bottom-inner { max-width: 680px; margin: 0 auto; display: flex; gap: 10px; }
+
+    .btn {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 11px 15px;
+      border-radius: 12px;
+      border: 1.5px solid var(--border);
+      background-color: var(--bg-card);
+      color: var(--text-main);
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--border); }
+    .btn-primary { flex: 1; background-color: var(--accent); }
+
+    .srs-grid { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .srs-btn { flex-direction: column; padding: 8px 6px; gap: 2px; font-size: 13px; }
+    .srs-sub { font-size: 10px; font-weight: 500; color: var(--text-muted); }
+
+    .bg-red    { background-color: var(--pastel-red); }
+    .bg-yellow { background-color: var(--pastel-yellow); }
+    .bg-green  { background-color: var(--pastel-green); }
+    .bg-blue   { background-color: var(--pastel-blue); }
+
+    /* ===== FORMS & MODAL ===== */
+    .view-hidden { display: none !important; }
+    .form-group { margin-bottom: 11px; }
+    .form-label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border);
+      background-color: var(--bg-card);
+      outline: none;
+    }
+    .form-input:focus, .form-textarea:focus { background-color: #FFFDF7; }
+
+    .form-en-section {
+      background: rgba(211, 230, 250, 0.35);
+      border: 1.5px dashed var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin: 12px 0;
+    }
+
+    .card-list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 13px;
+      border: 1.5px solid var(--border-light);
+      border-radius: 12px;
+      margin-bottom: 8px;
+      background: var(--bg-soft);
+    }
+
+    .kbd-hint { text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(26, 26, 26, 0.4);
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-box {
+      width: 100%;
+      max-width: 470px;
+      background: var(--bg-page);
+      border: 1.5px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 4px 4px 0px var(--border);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .tip-banner {
+      background: var(--pastel-yellow);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 12px;
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+
+    /* ===== PWA / MOBILE / TOUCH ===== */
+    html { -webkit-text-size-adjust: 100%; }
+    body { overscroll-behavior-y: contain; -webkit-tap-highlight-color: transparent; padding-top: env(safe-area-inset-top); }
+    button, .btn, .icon-btn, .step-node, .deck-item { -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+    .topbar { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+    .main { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
+    .bottom-bar { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+
+    #flashcardPanel { touch-action: pan-y; will-change: transform; cursor: pointer; }
+    #notebookBox { transform-origin: center top; }
+    .swipe-hint { display: none; text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 10px; }
+
+    @media (pointer: coarse) {
+      .icon-btn { width: 46px; height: 46px; font-size: 19px; }
+      .icon-btn-sm { width: 42px; height: 42px; font-size: 16px; }
+      .deck-mini-btn { width: 38px; height: 38px; font-size: 15px; }
+      .btn { min-height: 52px; font-size: 14px; border-radius: 14px; }
+      .srs-btn { min-height: 62px; font-size: 14px; }
+      .tab-btn { min-height: 48px; font-size: 14px; }
+      .deck-item { min-height: 52px; font-size: 14px; }
+      .step-node { width: 40px; height: 40px; font-size: 13px; }
+      .step-circles { gap: 10px; padding-bottom: 8px; }
+      .color-swatch { width: 34px; height: 34px; }
+      .form-input, .form-select, .form-textarea { font-size: 16px; min-height: 48px; }
+      .word-title { font-size: 38px; }
+      .kbd-hint { display: none; }
+      .swipe-hint { display: block; }
+    }
+    @media (max-width: 440px) {
+      .lang-chip { display: none; }
+      .brand { font-size: 17px; }
+      .topbar { padding-top: 10px; padding-bottom: 10px; }
+      .topbar-actions { gap: 6px; }
+      .panel { padding: 16px; }
+    }
+
+    /* ===== TOAST / OVERLAY / DATA MODAL ===== */
+    .toast {
+      position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom));
+      transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+      background: var(--text-main); color: #fff; font-size: 13px; font-weight: 600;
+      padding: 12px 16px; border-radius: 12px; max-width: 90vw; text-align: center;
+      z-index: 100; transition: opacity .2s ease, transform .2s ease;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    .drop-overlay {
+      position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center;
+      background: rgba(201, 232, 196, 0.92); border: 4px dashed var(--border);
+      font-size: 20px; font-weight: 800; text-align: center; padding: 24px;
+    }
+    .dropzone {
+      display: block; text-align: center; cursor: pointer; padding: 22px 12px;
+      border: 2px dashed var(--border); border-radius: 14px; background: var(--bg-soft);
+      font-size: 13px; font-weight: 700; line-height: 1.6;
+    }
+    .dropzone.over { background: var(--pastel-green); }
+    .dropzone small { display: block; font-weight: 500; color: var(--text-muted); }
+    .data-sec { margin-top: 16px; padding-top: 14px; border-top: 1.5px solid var(--border-light); }
+    .data-sec h4 { font-family: 'Roboto Slab', serif; font-size: 15px; margin-bottom: 8px; }
+    .data-sec p { font-size: 12px; line-height: 1.55; color: var(--text-muted); margin-bottom: 8px; }
+    .data-sec code { background: var(--pastel-yellow); padding: 0 4px; border-radius: 4px; font-size: 11px; }
+    .row-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .row-btns .btn { flex: 1; min-width: 120px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 0.9s linear infinite; display: inline-block; }
+    .offline-dot { display: none; position: absolute; top: -3px; right: -3px; width: 11px; height: 11px; border-radius: 50%; background: #E87B6C; border: 1.5px solid var(--border); }
+    body.is-offline .offline-dot { display: block; }
+    #syncBtn { position: relative; background: var(--pastel-blue); }
+  </style>
+</head>
+<body>
+
+  <!-- TOP HEADER -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button class="icon-btn" id="openDrawerBtn" title="Mở danh sách mục">☰</button>
+        <div class="brand">
+          <span>Vocab</span>
+          <span class="brand-highlight">Design</span>
+          <span class="lang-chip">JP + EN</span>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="syncBtn" title="Sync từ Google Sheets"><span class="sync-icon">⟳</span><i class="offline-dot"></i></button>
+        <button class="icon-btn" id="voiceModalBtn" title="Cài đặt giọng đọc Nhật & Anh">🎙</button>
+        <button class="icon-btn" id="quickAddBtn" title="Quản lý & Thêm từ">＋</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- SIDEBAR DRAWER -->
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-tabs">
+      <button class="tab-btn active" data-view="study">📖 Học thẻ</button>
+      <button class="tab-btn" data-view="manage">🗂 Quản lý</button>
+    </div>
+
+    <div class="drawer-section-head">
+      <span>📁 Bộ từ vựng</span>
+      <div style="display:flex; gap:6px;">
+        <button class="icon-btn icon-btn-sm" id="toggleDeckFormBtn" title="Thêm mục mới" style="background:var(--pastel-yellow);">＋</button>
+        <button class="icon-btn icon-btn-sm" id="closeDrawerBtn" title="Đóng">✕</button>
+      </div>
+    </div>
+
+    <div id="deckFormBox" class="deck-form-box view-hidden">
+      <div style="font-size:12px; font-weight:700; margin-bottom:8px;" id="deckFormTitle">Tạo mục mới</div>
+      <input type="hidden" id="editDeckId" />
+      <input class="form-input" id="deckNameInput" placeholder="VD: 04. Đọc hiểu N2" style="margin-bottom:8px;" />
+      <select class="form-select" id="deckLangInput" style="margin-bottom:6px;">
+        <option value="ja-JP">Ngôn ngữ chính: Tiếng Nhật</option>
+        <option value="en-US">Ngôn ngữ chính: Tiếng Anh</option>
+      </select>
+      <div class="color-picker-row" id="colorPickerRow"></div>
+      <div style="display:flex; gap:6px;">
+        <button class="btn btn-primary" id="saveDeckBtn" style="padding:7px 10px; font-size:12px;">Lưu mục</button>
+        <button class="btn" id="cancelDeckBtn" style="padding:7px 10px; font-size:12px;">Hủy</button>
+      </div>
+    </div>
+
+    <div class="deck-list" id="deckList"></div>
+
+    <div class="drawer-footer">
+      <button class="btn" id="openDataBtn" style="width:100%; background:var(--pastel-blue); padding:9px;">🗄 Dữ liệu · Nhập file · Sync</button>
+      <button class="btn" id="addDeckBottomBtn" style="width:100%; background:var(--pastel-yellow); padding:9px;">＋ Thêm mục mới</button>
+      <div class="progress-box">
+        <span>TIẾN ĐỘ ĐÃ THUỘC</span>
+        <span id="totalProgressText">0 / 0</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- VOICE SETTINGS MODAL -->
+  <div id="voiceModal" class="modal-backdrop view-hidden">
+    <div class="modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="font-family:'Roboto Slab',serif;">🎙 Giọng đọc Nhật & Anh</h3>
+        <button class="icon-btn icon-btn-sm" id="closeVoiceModalBtn">✕</button>
+      </div>
+
+      <div class="tip-banner">
+        <strong>1 Key Azure dùng chung cho cả Nhật & Anh:</strong><br/>
+        Dán Key + Region từ <b>HyperTTS (Anki)</b> xuống dưới để đọc chuẩn Tokyo và Mỹ/Anh. Không tự phát — chỉ đọc khi bạn bấm nút loa.
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Nguồn giọng đọc</label>
+        <select class="form-select" id="ttsEngine">
+          <option value="azure">Azure Neural TTS (Chuẩn Tokyo & US/UK)</option>
+          <option value="browser">Trình duyệt (Ưu tiên Edge Natural)</option>
+          <option value="voicevox">VOICEVOX (Nhật) + Trình duyệt (Anh)</option>
+        </select>
+      </div>
+
+      <div id="azureVoiceSection">
+        <div class="form-group">
+          <label class="form-label">🇯🇵 Giọng Tiếng Nhật (Tokyo)</label>
+          <select class="form-select" id="azureVoiceJP">
+            <option value="ja-JP-NanamiNeural">Nanami (Nữ Tokyo - Tự nhiên)</option>
+            <option value="ja-JP-KeitaNeural">Keita (Nam Tokyo - Trầm rõ)</option>
+            <option value="ja-JP-MayuNeural">Mayu (Nữ Tokyo - Nhẹ nhàng)</option>
+            <option value="ja-JP-DaichiNeural">Daichi (Nam Tokyo - Trẻ trung)</option>
+            <option value="ja-JP-ShioriNeural">Shiori (Nữ Tokyo - Giao tiếp)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">🇬🇧 Giọng Tiếng Anh (US / UK)</label>
+          <select class="form-select" id="azureVoiceEN">
+            <option value="en-US-AvaMultilingualNeural">Ava (Nữ Mỹ - Rất tự nhiên)</option>
+            <option value="en-US-AndrewMultilingualNeural">Andrew (Nam Mỹ - Ấm, rõ)</option>
+            <option value="en-US-JennyNeural">Jenny (Nữ Mỹ - Tiêu chuẩn)</option>
+            <option value="en-US-GuyNeural">Guy (Nam Mỹ - Tiêu chuẩn)</option>
+            <option value="en-GB-SoniaNeural">Sonia (Nữ Anh-Anh - Sang, rõ)</option>
+            <option value="en-GB-RyanNeural">Ryan (Nam Anh-Anh)</option>
+          </select>
+        </div>
+        <div style="display:grid; grid-template-columns:1.6fr 1fr; gap:8px;">
+          <div class="form-group">
+            <label class="form-label">Azure Speech Key</label>
+            <input class="form-input" id="azureKey" type="password" placeholder="Dán Key từ HyperTTS..." />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Region</label>
+            <input class="form-input" id="azureRegion" placeholder="japaneast" />
+          </div>
+        </div>
+      </div>
+
+      <div id="browserVoiceSection" class="view-hidden">
+        <div class="form-group">
+          <label class="form-label">🇯🇵 Giọng Nhật trên máy</label>
+          <select class="form-select" id="browserVoiceJP"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">🇬🇧 Giọng Anh trên máy</label>
+          <select class="form-select" id="browserVoiceEN"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tốc độ đọc: <span id="rateVal">0.95</span>x</label>
+          <input type="range" id="ttsRate" min="0.6" max="1.3" step="0.05" value="0.95" style="width:100%;" />
+        </div>
+      </div>
+
+      <div id="voicevoxSection" class="view-hidden">
+        <div class="form-group">
+          <label class="form-label">Speaker ID (VOICEVOX - Tiếng Nhật)</label>
+          <select class="form-select" id="voicevoxSpeaker">
+            <option value="2">四国めたん (Shikoku Metan - Chuẩn, rõ)</option>
+            <option value="3">ずんだもん (Zundamon)</option>
+            <option value="8">春日部つむぎ (Kasukabe Tsumugi)</option>
+            <option value="13">青山龍星 (Aoyama Ryusei - Nam trầm)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+        <button class="btn" id="testJPBtn" style="background:var(--pastel-green); padding:9px 12px;">🔊 Thử Nhật</button>
+        <button class="btn" id="testENBtn" style="background:var(--pastel-blue); padding:9px 12px;">🔊 Thử Anh</button>
+        <button class="btn btn-primary" id="saveVoiceBtn" style="padding:9px 12px;">Lưu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATA / IMPORT / SYNC MODAL -->
+  <div id="dataModal" class="modal-backdrop view-hidden">
+    <div class="modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <h3 style="font-family:'Roboto Slab',serif;">🗄 Dữ liệu &amp; Đồng bộ</h3>
+        <button class="icon-btn icon-btn-sm" id="closeDataModalBtn">✕</button>
+      </div>
+      <div class="subtitle-line" id="dataStats" style="margin-bottom:0;">—</div>
+
+      <div class="data-sec">
+        <h4>☁ Đồng bộ Google Sheets (1 chiều)</h4>
+        <p>
+          Trên máy tính: mở Sheet → <b>File → Share → Publish to web</b> → chọn sheet → định dạng <b>CSV</b> → Publish → copy link dán vào đây.
+          Dòng đầu là tiêu đề cột: <code>deck</code> <code>word</code> <code>reading</code> <code>meaning</code> <code>enWord</code> <code>enIpa</code> <code>note</code> <code>example</code> <code>exampleTrans</code> <code>enExample</code> <code>tag</code>.
+          Từ mới sẽ được thêm, từ đã có (cùng mục + cùng từ) sẽ được cập nhật; tiến độ học được giữ nguyên, không xóa thẻ nào.
+        </p>
+        <input class="form-input" id="sheetUrlInput" type="url" inputmode="url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" />
+        <div class="row-btns">
+          <button class="btn" id="saveSheetBtn">💾 Lưu link</button>
+          <button class="btn btn-primary" id="syncNowBtn"><span class="sync-icon">⟳</span> Sync ngay</button>
+        </div>
+        <div class="subtitle-line" id="lastSyncText" style="margin:8px 0 0; font-size:12px;"></div>
+      </div>
+
+      <div class="data-sec">
+        <h4>📥 Nhập file JSON / CSV</h4>
+        <label class="dropzone" id="dropZone" for="fileInput">
+          Kéo thả file vào đây hoặc chạm để chọn file
+          <small>.json (sao lưu / danh sách thẻ) • .csv (cùng cột như trên)</small>
+        </label>
+        <input type="file" id="fileInput" accept=".json,.csv,.tsv,.txt,application/json,text/csv,text/plain" multiple style="display:none;" />
+      </div>
+
+      <div class="data-sec">
+        <h4>📤 Sao lưu</h4>
+        <div class="row-btns" style="margin-top:0;">
+          <button class="btn" id="exportJsonBtn">⬇ Xuất JSON</button>
+          <button class="btn" id="exportCsvBtn">⬇ Xuất CSV (mẫu cho Sheet)</button>
+        </div>
+        <div class="row-btns">
+          <button class="btn bg-yellow view-hidden" id="installBtn">📲 Cài app vào màn hình chính</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="dropOverlay" class="drop-overlay view-hidden">📥 Thả file JSON / CSV vào đây để nhập</div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+    <!-- VIEW 1: STUDY -->
+    <section id="studyView">
+      <div class="panel" id="flashcardPanel">
+        <div class="breadcrumb">
+          <span id="deckBreadcrumb">01. Từ vựng / Thẻ 1 / 5</span>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span id="cardStateLabel" style="font-weight:700;">MẶT TRƯỚC</span>
+            <button class="deck-mini-btn" id="editCurrentCardBtn" title="Sửa thẻ này">✎</button>
+          </div>
+        </div>
+
+        <!-- TỪ VỰNG CHÍNH + LOA RIÊNG -->
+        <div class="word-header-row">
+          <h1 class="word-title" id="wordTitle">...</h1>
+          <button class="icon-btn speaker-btn" id="speakWordBtn" title="Nghe từ vựng (Phím R)">🔊</button>
+        </div>
+
+        <div class="pill-row" id="pillRow"></div>
+
+        <p class="subtitle-line" id="subtitleLine">Nhấn "Lật xem đáp án" hoặc phím Space để xem nghĩa Việt, Tiếng Anh và ví dụ.</p>
+
+        <div class="bento-grid">
+          <div class="bento-card" id="bentoReading">
+            <div class="bento-label" id="lblReading">CÁCH ĐỌC</div>
+            <div class="bento-value" id="valReading">—</div>
+          </div>
+          <div class="bento-card" id="bentoHanViet">
+            <div class="bento-label" id="lblNote">HÁN VIỆT / GHI CHÚ</div>
+            <div class="bento-value" id="valNote">—</div>
+          </div>
+          <div class="bento-card" id="bentoStatus">
+            <div class="bento-label">TRẠNG THÁI</div>
+            <div class="bento-value" id="valStatus">Mới</div>
+          </div>
+        </div>
+
+        <div class="notebook-box" id="notebookBox">
+          <div id="frontPlaceholder" class="hidden-placeholder">
+            <strong>[ Đang ẩn đáp án ]</strong><br />
+            Bấm vào đây hoặc nhấn <b>Space</b> để mở nghĩa Việt, Tiếng Anh & ví dụ
+          </div>
+
+          <div id="backContent" class="view-hidden">
+            <!-- 2 Ô SONG SONG: NGHĨA VIỆT + TIẾNG ANH -->
+            <div class="meaning-en-grid" id="meaningEnGrid">
+              <div class="meaning-box">
+                <div class="bento-label">NGHĨA TIẾNG VIỆT</div>
+                <div class="meaning-main" id="valMeaning"></div>
+              </div>
+
+              <div class="english-box" id="englishBox">
+                <div style="flex:1; min-width:0;">
+                  <div class="bento-label">🇬🇧 TIẾNG ANH</div>
+                  <div class="meaning-main" id="valEnWord"></div>
+                  <div class="en-ipa" id="valEnIpa"></div>
+                </div>
+                <button class="icon-btn icon-btn-sm speaker-btn-en" id="speakEnWordBtn" title="Nghe từ tiếng Anh (Phím T)">🔊</button>
+              </div>
+            </div>
+
+            <!-- VÍ DỤ CHÍNH (NHẬT) + LOA RIÊNG -->
+            <div class="example-block">
+              <div class="bento-label">VÍ DỤ THỰC TẾ</div>
+              <div class="example-row">
+                <div class="example-sentence" id="valExample"></div>
+                <button class="icon-btn icon-btn-sm speaker-btn" id="speakExampleBtn" title="Nghe ví dụ (Phím E)">🔊</button>
+              </div>
+              <div class="example-trans" id="valExampleTrans"></div>
+            </div>
+
+            <!-- VÍ DỤ TIẾNG ANH (TỰ ẨN NẾU TRỐNG) + LOA RIÊNG -->
+            <div class="en-example-wrap view-hidden" id="enExampleWrap">
+              <div class="bento-label">🇬🇧 VÍ DỤ TIẾNG ANH</div>
+              <div class="example-row" style="margin-bottom:0;">
+                <div class="example-sentence" id="valEnExample" style="font-size:14px;"></div>
+                <button class="icon-btn icon-btn-sm speaker-btn-en" id="speakEnExampleBtn" title="Nghe ví dụ tiếng Anh">🔊</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="notebook-controls">
+            <div class="legend">
+              <span><i class="legend-dot" style="background:var(--accent)"></i>Đã nhớ</span>
+              <span><i class="legend-dot" style="background:var(--pastel-yellow)"></i>Đang ôn</span>
+            </div>
+            <button class="icon-btn icon-btn-sm" id="resetCardBtn" title="Úp / Lật lại thẻ">↺</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-panel">
+        <div class="step-header">
+          <span>TRONG BỘ NÀY</span>
+          <span id="stepCounter">Thẻ 1 / 5</span>
+        </div>
+        <div class="step-circles" id="stepCircles"></div>
+      </div>
+
+      <div class="kbd-hint">Phím tắt: [Space] Lật • [←/→] Đổi thẻ • [R] Nghe từ • [T] Nghe Tiếng Anh • [E] Nghe ví dụ • [1-4] Chấm điểm</div>
+      <div class="swipe-hint">👆 Chạm thẻ để lật • Vuốt ← → để chuyển thẻ</div>
+    </section>
+
+    <!-- VIEW 2: MANAGE / ADD / EDIT -->
+    <section id="manageView" class="view-hidden">
+      <div class="panel">
+        <div class="breadcrumb">
+          <span id="cardFormModeLabel">QUẢN LÝ DỮ LIỆU</span>
+          <button class="btn view-hidden" id="cancelEditCardBtn" style="padding:4px 10px; font-size:11px;">✕ Hủy sửa</button>
+        </div>
+        <h2 style="font-family:'Roboto Slab',serif; margin-bottom:14px;" id="cardFormHeading">Thêm từ vựng mới</h2>
+
+        <form id="addCardForm">
+          <input type="hidden" id="editCardId" />
+          <div class="form-group">
+            <label class="form-label">Chọn bộ thẻ (Mục)</label>
+            <select class="form-select" id="inDeck"></select>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="form-group">
+              <label class="form-label">Từ vựng (Nhật) *</label>
+              <input class="form-input" id="inWord" required placeholder="VD: 認証" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cách đọc</label>
+              <input class="form-input" id="inReading" placeholder="VD: にんしょう" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nghĩa tiếng Việt *</label>
+            <input class="form-input" id="inMeaning" required placeholder="VD: Xác thực, chứng thực" />
+          </div>
+
+          <!-- KHỐI NHẬP TIẾNG ANH KÈM THEO -->
+          <div class="form-en-section">
+            <div class="bento-label" style="color:var(--text-main); margin-bottom:8px;">🇬🇧 TIẾNG ANH KÈM THEO (HIỆN KHI LẬT THẺ)</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div class="form-group" style="margin-bottom:8px;">
+                <label class="form-label">Từ tiếng Anh</label>
+                <input class="form-input" id="inEnWord" placeholder="VD: Authentication" />
+              </div>
+              <div class="form-group" style="margin-bottom:8px;">
+                <label class="form-label">Phiên âm IPA</label>
+                <input class="form-input" id="inEnIpa" placeholder="VD: /ɔːˌθen.tɪˈkeɪ.ʃən/" />
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">Ví dụ tiếng Anh (không bắt buộc)</label>
+              <input class="form-input" id="inEnExample" placeholder="VD: Two-factor authentication is required to log in." />
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="form-group">
+              <label class="form-label">Loại từ / Nhãn</label>
+              <input class="form-input" id="inTag" placeholder="VD: Danh từ • N2" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hán Việt / Ghi chú</label>
+              <input class="form-input" id="inNote" placeholder="VD: NHẬN CHỨNG" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Câu ví dụ (Nhật)</label>
+            <input class="form-input" id="inExample" placeholder="VD: ログイン時に二段階認証が必要です。" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Dịch ví dụ</label>
+            <input class="form-input" id="inExampleTrans" placeholder="VD: Cần xác thực hai bước khi đăng nhập." />
+          </div>
+          <button type="submit" class="btn btn-primary" id="submitCardBtn" style="width:100%;">＋ Lưu vào bộ thẻ</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="breadcrumb"><span>NHẬP NHANH HÀNG LOẠT (EXCEL / CSV)</span></div>
+        <button class="btn" id="openDataFromManage" style="width:100%; margin-bottom:12px; background:var(--pastel-blue);">📥 Nhập file JSON/CSV · ⟳ Sync Google Sheets</button>
+        <p class="subtitle-line" style="margin-bottom:10px; font-size:12px;">
+          Mỗi dòng 1 từ: <b>Từ Nhật | Cách đọc | Nghĩa Việt | Từ Anh | IPA | Hán Việt | Ví dụ Nhật | Dịch ví dụ | Ví dụ Anh</b>
+        </p>
+        <textarea class="form-textarea" id="bulkInput" rows="3" placeholder="効率 | こうりつ | Hiệu suất | Efficiency | /ɪˈfɪʃ.ən.si/ | HIỆU SUẤT | 効率を上げる。 | Nâng cao hiệu suất. | We need to improve efficiency."></textarea>
+        <button class="btn" id="bulkImportBtn" style="margin-top:10px; width:100%; background:var(--pastel-yellow);">📥 Nhập hàng loạt vào mục đang chọn</button>
+      </div>
+
+      <div class="panel">
+        <div class="breadcrumb"><span>DANH SÁCH THẺ TRONG MỤC HIỆN TẠI</span></div>
+        <div id="manageCardList"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- BOTTOM BAR -->
+  <footer class="bottom-bar" id="bottomBar">
+    <div class="bottom-inner" id="frontActions">
+      <button class="btn" id="prevBtn">← Quay lại</button>
+      <button class="btn btn-primary" id="flipBtn">Lật xem đáp án →</button>
+    </div>
+
+    <div class="bottom-inner view-hidden" id="backActions">
+      <div class="srs-grid">
+        <button class="btn srs-btn bg-red" data-rate="again"><span>Quên</span><span class="srs-sub">1 phút</span></button>
+        <button class="btn srs-btn bg-yellow" data-rate="hard"><span>Khó</span><span class="srs-sub">10 phút</span></button>
+        <button class="btn srs-btn bg-green" data-rate="good"><span>Tốt</span><span class="srs-sub">1 ngày</span></button>
+        <button class="btn srs-btn bg-blue" data-rate="easy"><span>Dễ</span><span class="srs-sub">4 ngày</span></button>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const DECK_COLORS = ['#E8B86D', '#6CC484', '#63A4E8', '#9D84E8', '#F08A6C', '#E87BA6'];
+
+    const DEFAULT_DATA = {
+      decks: [
+        { id: 'n2', name: '01. Từ vựng N2', color: '#E8B86D', lang: 'ja-JP' },
+        { id: 'kaiwa', name: '02. Giao tiếp Kaiwa', color: '#6CC484', lang: 'ja-JP' }
+      ],
+      cards: [
+        {
+          id: 1, deckId: 'n2', word: '認証', reading: 'にんしょう', meaning: 'Xác thực, chứng thực',
+          enWord: 'Authentication', enIpa: '/ɔːˌθen.tɪˈkeɪ.ʃən/',
+          enExample: 'Two-factor authentication is required to log in.',
+          tag: 'Danh từ • N2', note: 'NHẬN CHỨNG', example: 'ログイン時に二段階認証が必要です。',
+          exampleTrans: 'Cần xác thực hai bước khi đăng nhập.', mastered: false, level: 'Mới'
+        },
+        {
+          id: 2, deckId: 'n2', word: '把握', reading: 'はあく', meaning: 'Nắm bắt, hiểu rõ tình hình',
+          enWord: 'Grasp / Understand', enIpa: '/ɡræsp/',
+          enExample: 'I have a clear grasp of the current situation.',
+          tag: 'Danh từ • N2', note: 'BẢ ÁC', example: '現在の状況を正確に把握しています。',
+          exampleTrans: 'Tôi đang nắm bắt chính xác tình hình hiện tại.', mastered: false, level: 'Mới'
+        },
+        {
+          id: 3, deckId: 'kaiwa', word: 'さすが', reading: 'さすが', meaning: 'Quả nhiên là, đúng là (khen ngợi)',
+          enWord: 'As expected of', enIpa: '/æz ɪkˈspek.tɪd/',
+          enExample: 'As expected of a pro, you work so fast!',
+          tag: 'Phó từ • Kaiwa', note: 'Khẩu ngữ', example: 'さすがプロですね、仕事が速い！',
+          exampleTrans: 'Đúng là dân chuyên nghiệp, làm việc nhanh thật!', mastered: false, level: 'Mới'
+        }
+      ]
+    };
+
+    const DEFAULT_VOICE = {
+      engine: 'azure',
+      browserVoiceJP: '',
+      browserVoiceEN: '',
+      rate: 0.95,
+      azureVoiceJP: 'ja-JP-NanamiNeural',
+      azureVoiceEN: 'en-US-AvaMultilingualNeural',
+      azureKey: '',
+      azureRegion: 'japaneast',
+      voicevoxSpeaker: '2'
+    };
+
+    let appData = { decks: [], cards: [] };
+    let voiceCfg = { ...DEFAULT_VOICE, ...(JSON.parse(localStorage.getItem('soft_vocab_voice')) || {}) };
+    if (voiceCfg.azureVoice && !voiceCfg.azureVoiceJP) voiceCfg.azureVoiceJP = voiceCfg.azureVoice;
+
+    // Tự động bổ sung Tiếng Anh cho các thẻ mẫu cũ để F5 thấy ngay
+    const samplePatch = {
+      '認証': { enWord: 'Authentication', enIpa: '/ɔːˌθen.tɪˈkeɪ.ʃən/', enExample: 'Two-factor authentication is required to log in.' },
+      '把握': { enWord: 'Grasp / Understand', enIpa: '/ɡræsp/', enExample: 'I have a clear grasp of the current situation.' },
+      '効率': { enWord: 'Efficiency', enIpa: '/ɪˈfɪʃ.ən.si/', enExample: 'I built a tool to improve work efficiency.' },
+      'さすが': { enWord: 'As expected of', enIpa: '/æz ɪkˈspek.tɪd/', enExample: 'As expected of a pro, you work so fast!' },
+      'とりあえず': { enWord: 'For now / First of all', enIpa: '/fɔːr naʊ/', enExample: 'I will have a beer for now, please.' }
+    };
+    function applySamplePatch() {
+    let patched = false;
+    appData.cards.forEach(c => {
+      if (!c.enWord && samplePatch[c.word]) {
+        Object.assign(c, samplePatch[c.word]);
+        patched = true;
+      }
+    });
+    return patched;
+    }
+
+    let currentDeckId = '';
+    let currentIndex = 0;
+    let isFlipped = false;
+    let currentView = 'study';
+    let selectedDeckColor = DECK_COLORS[0];
+    let currentAudioObj = null;
+
+    // ===== INDEXEDDB (lưu vĩnh viễn, offline) =====
+    let db = null;
+    let saveChain = Promise.resolve();
+    function openDB() {
+      return new Promise((resolve, reject) => {
+        if (!('indexedDB' in window)) return reject(new Error('Không hỗ trợ IndexedDB'));
+        const req = indexedDB.open('vocab_pwa_db', 1);
+        req.onupgradeneeded = () => {
+          const d = req.result;
+          d.createObjectStore('decks', { keyPath: 'id' });
+          d.createObjectStore('cards', { keyPath: 'id' });
+          d.createObjectStore('meta', { keyPath: 'key' });
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    function idbGetAll(store) {
+      return new Promise((resolve, reject) => {
+        const r = db.transaction(store).objectStore(store).getAll();
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+      });
+    }
+    function metaGet(key) {
+      return new Promise((resolve) => {
+        if (!db) return resolve(localStorage.getItem('vocab_meta_' + key));
+        const r = db.transaction('meta').objectStore('meta').get(key);
+        r.onsuccess = () => resolve(r.result ? r.result.value : null);
+        r.onerror = () => resolve(null);
+      });
+    }
+    function metaSet(key, value) {
+      return new Promise((resolve) => {
+        if (!db) { localStorage.setItem('vocab_meta_' + key, value); return resolve(); }
+        const tx = db.transaction('meta', 'readwrite');
+        tx.objectStore('meta').put({ key, value });
+        tx.oncomplete = resolve;
+        tx.onerror = tx.onabort = resolve;
+      });
+    }
+    function saveData() {
+      if (!db) {
+        try { localStorage.setItem('soft_vocab_v1', JSON.stringify(appData)); } catch (e) {}
+        return Promise.resolve();
+      }
+      const decks = appData.decks.map((d, i) => ({ ...d, _order: i }));
+      const cards = appData.cards.map(c => ({ ...c }));
+      saveChain = saveChain.then(() => new Promise((resolve) => {
+        const tx = db.transaction(['decks', 'cards'], 'readwrite');
+        const ds = tx.objectStore('decks'), cs = tx.objectStore('cards');
+        ds.clear(); cs.clear();
+        decks.forEach(d => ds.put(d));
+        cards.forEach(c => cs.put(c));
+        tx.oncomplete = resolve;
+        tx.onerror = tx.onabort = () => { toast('⚠ Không lưu được vào IndexedDB'); resolve(); };
+      }));
+      return saveChain;
+    }
+    function saveVoiceCfg() { localStorage.setItem('soft_vocab_voice', JSON.stringify(voiceCfg)); }
+    function getDeckCards() { return appData.cards.filter(c => c.deckId === currentDeckId); }
+    function getCurrentDeck() { return appData.decks.find(d => d.id === currentDeckId) || appData.decks[0]; }
+
+    // ===== HỆ THỐNG GIỌNG ĐỌC NHẬT & ANH =====
+    function populateBrowserVoices() {
+      if (!('speechSynthesis' in window)) return;
+      const voices = window.speechSynthesis.getVoices();
+
+      const fillSelect = (selId, langPrefix, savedVal, preferKeywords) => {
+        const sel = document.getElementById(selId);
+        const list = voices.filter(v => v.lang.toLowerCase().startsWith(langPrefix));
+        list.sort((a, b) => {
+          const score = (name) => {
+            const n = name.toLowerCase();
+            if (preferKeywords.some(k => n.includes(k)) && n.includes('natural')) return 100;
+            if (n.includes('natural') || n.includes('neural')) return 90;
+            if (preferKeywords.some(k => n.includes(k))) return 75;
+            if (n.includes('google')) return 10;
+            return 50;
+          };
+          return score(b.name) - score(a.name);
+        });
+        if (list.length === 0) { sel.innerHTML = '<option value="">(Mặc định hệ thống)</option>'; return ''; }
+        sel.innerHTML = list.map(v => `<option value="${v.name}">${v.name}</option>`).join('');
+        if (savedVal && list.some(v => v.name === savedVal)) { sel.value = savedVal; return savedVal; }
+        sel.value = list[0].name;
+        return list[0].name;
+      };
+
+      voiceCfg.browserVoiceJP = fillSelect('browserVoiceJP', 'ja', voiceCfg.browserVoiceJP, ['nanami', 'keita', 'kyoko', 'otoya']);
+      voiceCfg.browserVoiceEN = fillSelect('browserVoiceEN', 'en', voiceCfg.browserVoiceEN, ['ava', 'andrew', 'jenny', 'aria', 'sonia', 'samantha']);
+    }
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = populateBrowserVoices;
+      populateBrowserVoices();
+    }
+
+    async function speak(text, forceLang = null) {
+      if (!text) return;
+      const lang = forceLang || getCurrentDeck()?.lang || 'ja-JP';
+      const isEN = lang.toLowerCase().startsWith('en');
+
+      if (currentAudioObj) { currentAudioObj.pause(); currentAudioObj = null; }
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+
+      if (voiceCfg.engine === 'azure' && voiceCfg.azureKey) {
+        try {
+          const voiceName = isEN ? voiceCfg.azureVoiceEN : voiceCfg.azureVoiceJP;
+          const xmlLang = isEN ? (voiceName.startsWith('en-GB') ? 'en-GB' : 'en-US') : 'ja-JP';
+          const ssml = `<speak version='1.0' xml:lang='${xmlLang}'><voice name='${voiceName}'>${text}</voice></speak>`;
+          const res = await fetch(`https://${voiceCfg.azureRegion}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+            method: 'POST',
+            headers: {
+              'Ocp-Apim-Subscription-Key': voiceCfg.azureKey,
+              'Content-Type': 'application/ssml+xml',
+              'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3'
+            },
+            body: ssml
+          });
+          if (!res.ok) throw new Error('Azure lỗi key/region');
+          const blob = await res.blob();
+          currentAudioObj = new Audio(URL.createObjectURL(blob));
+          currentAudioObj.play();
+          return;
+        } catch (err) {
+          console.warn('Azure fallback sang trình duyệt:', err);
+        }
+      }
+
+      if (voiceCfg.engine === 'voicevox' && !isEN) {
+        try {
+          const spk = voiceCfg.voicevoxSpeaker || '2';
+          const qRes = await fetch(`http://localhost:50021/audio_query?text=${encodeURIComponent(text)}&speaker=${spk}`, { method: 'POST' });
+          const query = await qRes.json();
+          const sRes = await fetch(`http://localhost:50021/synthesis?speaker=${spk}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(query)
+          });
+          const blob = await sRes.blob();
+          currentAudioObj = new Audio(URL.createObjectURL(blob));
+          currentAudioObj.play();
+          return;
+        } catch (err) {
+          console.warn('VOICEVOX chưa mở, fallback trình duyệt:', err);
+        }
+      }
+
+      if (!('speechSynthesis' in window)) return;
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = isEN ? 'en-US' : 'ja-JP';
+      utter.rate = parseFloat(voiceCfg.rate) || 0.95;
+
+      const voices = window.speechSynthesis.getVoices();
+      const targetName = isEN ? voiceCfg.browserVoiceEN : voiceCfg.browserVoiceJP;
+      const prefix = isEN ? 'en' : 'ja';
+      const picked = voices.find(v => v.name === targetName)
+        || voices.find(v => v.lang.toLowerCase().startsWith(prefix) && !v.name.toLowerCase().includes('google'))
+        || voices.find(v => v.lang.toLowerCase().startsWith(prefix));
+      if (picked) utter.voice = picked;
+      window.speechSynthesis.speak(utter);
+    }
+
+    // ===== SIDEBAR & MỤC =====
+    function renderColorSwatches() {
+      const row = document.getElementById('colorPickerRow');
+      row.innerHTML = DECK_COLORS.map(c =>
+        `<span class="color-swatch ${c === selectedDeckColor ? 'selected' : ''}" style="background:${c}" onclick="pickDeckColor('${c}')"></span>`
+      ).join('');
+    }
+    window.pickDeckColor = (c) => { selectedDeckColor = c; renderColorSwatches(); };
+
+    function openDeckForm(deck = null) {
+      document.getElementById('deckFormBox').classList.remove('view-hidden');
+      if (deck) {
+        document.getElementById('deckFormTitle').textContent = 'Sửa mục';
+        document.getElementById('editDeckId').value = deck.id;
+        document.getElementById('deckNameInput').value = deck.name;
+        document.getElementById('deckLangInput').value = deck.lang || 'ja-JP';
+        selectedDeckColor = deck.color || DECK_COLORS[0];
+      } else {
+        document.getElementById('deckFormTitle').textContent = 'Tạo mục mới';
+        document.getElementById('editDeckId').value = '';
+        document.getElementById('deckNameInput').value = '';
+        document.getElementById('deckLangInput').value = 'ja-JP';
+        selectedDeckColor = DECK_COLORS[appData.decks.length % DECK_COLORS.length];
+      }
+      renderColorSwatches();
+      document.getElementById('deckNameInput').focus();
+    }
+
+    document.getElementById('toggleDeckFormBtn').onclick = () => openDeckForm();
+    document.getElementById('addDeckBottomBtn').onclick = () => openDeckForm();
+    document.getElementById('cancelDeckBtn').onclick = () => document.getElementById('deckFormBox').classList.add('view-hidden');
+
+    document.getElementById('saveDeckBtn').onclick = () => {
+      const name = document.getElementById('deckNameInput').value.trim();
+      if (!name) return alert('Nhập tên mục trước đã nhé!');
+      const lang = document.getElementById('deckLangInput').value;
+      const editId = document.getElementById('editDeckId').value;
+
+      if (editId) {
+        const d = appData.decks.find(x => x.id === editId);
+        if (d) { d.name = name; d.lang = lang; d.color = selectedDeckColor; }
+      } else {
+        const newId = 'deck_' + Date.now();
+        appData.decks.push({ id: newId, name, lang, color: selectedDeckColor });
+        currentDeckId = newId;
+        currentIndex = 0;
+      }
+      saveData();
+      document.getElementById('deckFormBox').classList.add('view-hidden');
+      renderAll();
+    };
+
+    window.editDeckById = (e, id) => {
+      e.stopPropagation();
+      const d = appData.decks.find(x => x.id === id);
+      if (d) openDeckForm(d);
+    };
+
+    window.deleteDeckById = (e, id) => {
+      e.stopPropagation();
+      if (appData.decks.length <= 1) return alert('Cần giữ lại ít nhất 1 mục!');
+      if (!confirm('Xóa mục này và toàn bộ thẻ bên trong?')) return;
+      appData.decks = appData.decks.filter(x => x.id !== id);
+      appData.cards = appData.cards.filter(c => c.deckId !== id);
+      if (currentDeckId === id) { currentDeckId = appData.decks[0].id; currentIndex = 0; }
+      saveData();
+      renderAll();
+    };
+
+    function renderSidebar() {
+      const deckList = document.getElementById('deckList');
+      deckList.innerHTML = '';
+
+      appData.decks.forEach(deck => {
+        const cards = appData.cards.filter(c => c.deckId === deck.id);
+        const done = cards.filter(c => c.mastered).length;
+        const item = document.createElement('div');
+        item.className = 'deck-item' + (deck.id === currentDeckId ? ' active' : '');
+        item.innerHTML = `
+          <div class="deck-left">
+            <span class="folder-dot" style="background:${deck.color}"></span>
+            <span class="deck-name-text" title="${esc(deck.name)}">${esc(deck.name)}</span>
+          </div>
+          <div class="deck-right">
+            <span style="font-size:11px; color:var(--text-muted); margin-right:2px;">${done}/${cards.length}</span>
+            <button class="deck-mini-btn" title="Sửa mục" onclick="editDeckById(event, '${deck.id}')">✎</button>
+            <button class="deck-mini-btn del" title="Xóa mục" onclick="deleteDeckById(event, '${deck.id}')">✕</button>
+          </div>
+        `;
+        item.onclick = () => {
+          currentDeckId = deck.id;
+          currentIndex = 0;
+          isFlipped = false;
+          renderAll();
+          closeDrawer();
+        };
+        deckList.appendChild(item);
+      });
+
+      const totalMastered = appData.cards.filter(c => c.mastered).length;
+      document.getElementById('totalProgressText').textContent = `${totalMastered} / ${appData.cards.length}`;
+
+      const select = document.getElementById('inDeck');
+      select.innerHTML = appData.decks.map(d =>
+        `<option value="${d.id}" ${d.id === currentDeckId ? 'selected' : ''}>${esc(d.name)}</option>`
+      ).join('');
+    }
+
+    // ===== RENDER FLASHCARD =====
+    function renderCard() {
+      const cards = getDeckCards();
+      const deck = getCurrentDeck();
+      const isDeckEN = (deck?.lang || '').startsWith('en');
+
+      document.body.classList.toggle('mode-en', isDeckEN);
+      document.getElementById('lblReading').textContent = isDeckEN ? 'PHIÊN ÂM (IPA)' : 'CÁCH ĐỌC';
+      document.getElementById('lblNote').textContent = isDeckEN ? 'ĐỒNG NGHĨA / GHI CHÚ' : 'HÁN VIỆT / GHI CHÚ';
+
+      if (!deck || cards.length === 0) {
+        document.getElementById('deckBreadcrumb').textContent = `${deck ? deck.name : ''} / 0 thẻ`;
+        document.getElementById('wordTitle').textContent = 'Mục này chưa có thẻ';
+        document.getElementById('pillRow').innerHTML = '';
+        document.getElementById('stepCircles').innerHTML = '';
+        document.getElementById('stepCounter').textContent = '0 / 0';
+        document.getElementById('speakWordBtn').classList.add('view-hidden');
+        document.getElementById('frontPlaceholder').innerHTML = 'Bấm nút <b>＋</b> ở góc trên để thêm từ vựng vào mục này.';
+        document.getElementById('frontPlaceholder').classList.remove('view-hidden');
+        document.getElementById('backContent').classList.add('view-hidden');
+        return;
+      }
+
+      document.getElementById('speakWordBtn').classList.remove('view-hidden');
+
+      if (currentIndex >= cards.length) currentIndex = 0;
+      if (currentIndex < 0) currentIndex = cards.length - 1;
+      const card = cards[currentIndex];
+
+      document.getElementById('deckBreadcrumb').textContent = `${deck.name}  /  Thẻ ${currentIndex + 1} / ${cards.length}`;
+      document.getElementById('cardStateLabel').textContent = isFlipped ? 'ĐÁP ÁN' : 'MẶT TRƯỚC';
+      document.getElementById('wordTitle').textContent = card.word;
+
+      const tags = (card.tag || 'Từ vựng').split('•').map(s => s.trim());
+      document.getElementById('pillRow').innerHTML = `
+        <span class="pill pill-yellow">🏷 ${esc(tags[0]) || 'Từ vựng'}</span>
+        ${tags[1] ? `<span class="pill pill-accent">📊 ${esc(tags[1])}</span>` : ''}
+        <span class="pill pill-purple">⚡ ${esc(card.level) || 'Mới'}</span>
+      `;
+
+      const bentoReading = document.getElementById('bentoReading');
+      const bentoHanViet = document.getElementById('bentoHanViet');
+      const bentoStatus = document.getElementById('bentoStatus');
+      const notebookBox = document.getElementById('notebookBox');
+
+      if (isFlipped) {
+        bentoReading.classList.add('revealed');
+        bentoHanViet.classList.add('revealed');
+        bentoStatus.classList.add('revealed');
+        notebookBox.classList.add('revealed');
+
+        document.getElementById('valReading').textContent = card.reading || '—';
+        document.getElementById('valNote').textContent = card.note || '—';
+        document.getElementById('valStatus').textContent = card.mastered ? 'Đã thuộc' : 'Đang ôn';
+
+        // Nghĩa tiếng Việt
+        document.getElementById('valMeaning').textContent = card.meaning;
+
+        // Khối Tiếng Anh song song
+        const hasEN = Boolean(card.enWord && card.enWord.trim());
+        document.getElementById('englishBox').classList.toggle('view-hidden', !hasEN);
+        document.getElementById('meaningEnGrid').classList.toggle('single-col', !hasEN);
+        if (hasEN) {
+          document.getElementById('valEnWord').textContent = card.enWord;
+          document.getElementById('valEnIpa').textContent = card.enIpa || '';
+        }
+
+        // Ví dụ chính (Nhật)
+        document.getElementById('valExample').textContent = card.example || '(Chưa có ví dụ)';
+        document.getElementById('speakExampleBtn').classList.toggle('view-hidden', !card.example);
+        document.getElementById('valExampleTrans').textContent = card.exampleTrans || '';
+
+        // Ví dụ tiếng Anh
+        const hasEnEx = Boolean(card.enExample && card.enExample.trim());
+        document.getElementById('enExampleWrap').classList.toggle('view-hidden', !hasEnEx);
+        if (hasEnEx) {
+          document.getElementById('valEnExample').textContent = card.enExample;
+        }
+
+        document.getElementById('frontPlaceholder').classList.add('view-hidden');
+        document.getElementById('backContent').classList.remove('view-hidden');
+        document.getElementById('frontActions').classList.add('view-hidden');
+        document.getElementById('backActions').classList.remove('view-hidden');
+      } else {
+        bentoReading.classList.remove('revealed');
+        bentoHanViet.classList.remove('revealed');
+        bentoStatus.classList.remove('revealed');
+        notebookBox.classList.remove('revealed');
+
+        document.getElementById('valReading').textContent = '—';
+        document.getElementById('valNote').textContent = '—';
+        document.getElementById('valStatus').textContent = card.mastered ? 'Đã thuộc' : 'Chưa nhớ';
+
+        document.getElementById('frontPlaceholder').innerHTML = '<strong>[ Đang ẩn đáp án ]</strong><br />Bấm vào đây hoặc nhấn <b>Space</b> để mở nghĩa Việt, Tiếng Anh & ví dụ';
+        document.getElementById('frontPlaceholder').classList.remove('view-hidden');
+        document.getElementById('backContent').classList.add('view-hidden');
+        document.getElementById('frontActions').classList.remove('view-hidden');
+        document.getElementById('backActions').classList.add('view-hidden');
+      }
+
+      document.getElementById('stepCounter').textContent = `Thẻ ${currentIndex + 1} / ${cards.length}`;
+      const stepCircles = document.getElementById('stepCircles');
+      stepCircles.innerHTML = '';
+      cards.forEach((c, idx) => {
+        const node = document.createElement('button');
+        node.className = 'step-node' + (idx === currentIndex ? ' current' : (c.mastered ? ' done' : ''));
+        node.textContent = idx + 1;
+        node.onclick = () => { currentIndex = idx; isFlipped = false; renderCard(); };
+        stepCircles.appendChild(node);
+      });
+    }
+
+    // ===== QUẢN LÝ & SỬA THẺ =====
+    function resetCardForm() {
+      document.getElementById('addCardForm').reset();
+      document.getElementById('editCardId').value = '';
+      document.getElementById('inDeck').value = currentDeckId;
+      document.getElementById('cardFormHeading').textContent = 'Thêm từ vựng mới';
+      document.getElementById('submitCardBtn').textContent = '＋ Lưu vào bộ thẻ';
+      document.getElementById('cancelEditCardBtn').classList.add('view-hidden');
+    }
+
+    window.startEditCard = function(id) {
+      const card = appData.cards.find(c => c.id === id);
+      if (!card) return;
+      switchView('manage');
+      document.getElementById('editCardId').value = card.id;
+      document.getElementById('inDeck').value = card.deckId;
+      document.getElementById('inWord').value = card.word;
+      document.getElementById('inReading').value = card.reading || '';
+      document.getElementById('inMeaning').value = card.meaning;
+      document.getElementById('inEnWord').value = card.enWord || '';
+      document.getElementById('inEnIpa').value = card.enIpa || '';
+      document.getElementById('inEnExample').value = card.enExample || '';
+      document.getElementById('inTag').value = card.tag || '';
+      document.getElementById('inNote').value = card.note || '';
+      document.getElementById('inExample').value = card.example || '';
+      document.getElementById('inExampleTrans').value = card.exampleTrans || '';
+
+      document.getElementById('cardFormHeading').textContent = 'Chỉnh sửa thẻ từ vựng';
+      document.getElementById('submitCardBtn').textContent = '💾 Cập nhật thẻ';
+      document.getElementById('cancelEditCardBtn').classList.remove('view-hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    document.getElementById('cancelEditCardBtn').onclick = resetCardForm;
+    document.getElementById('editCurrentCardBtn').onclick = () => {
+      const card = getDeckCards()[currentIndex];
+      if (card) startEditCard(card.id);
+    };
+
+    function renderManageList() {
+      const list = document.getElementById('manageCardList');
+      const cards = getDeckCards();
+      if (cards.length === 0) {
+        list.innerHTML = '<p style="font-size:13px; color:var(--text-muted)">Chưa có thẻ nào trong mục này.</p>';
+        return;
+      }
+      list.innerHTML = cards.map(c => `
+        <div class="card-list-item">
+          <div style="flex:1;">
+            <strong>${esc(c.word)}</strong>
+            <span style="font-size:12px; color:var(--text-muted)">(${esc(c.reading) || '-'})</span>
+            ${c.enWord ? `<span style="font-size:11px; background:var(--pastel-blue); border:1px solid var(--border); padding:1px 6px; border-radius:6px; margin-left:4px;">${esc(c.enWord)}</span>` : ''}
+            <div style="font-size:12px; margin-top:3px;">${esc(c.meaning)}</div>
+          </div>
+          <div style="display:flex; gap:6px; flex-shrink:0;">
+            <button class="icon-btn icon-btn-sm" style="background:var(--pastel-yellow);" title="Sửa" onclick="startEditCard(${c.id})">✎</button>
+            <button class="icon-btn icon-btn-sm" style="background:var(--pastel-red);" title="Xóa" onclick="deleteCard(${c.id})">✕</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    window.deleteCard = function(id) {
+      if (!confirm('Xóa thẻ này?')) return;
+      appData.cards = appData.cards.filter(c => c.id !== id);
+      saveData();
+      renderAll();
+    };
+
+    function renderAll() {
+      renderSidebar();
+      renderCard();
+      renderManageList();
+    }
+
+    // ===== ACTIONS =====
+    function flipCard() {
+      if (!getDeckCards()[currentIndex]) return;
+      isFlipped = true;
+      renderCard(); // Không tự phát âm
+      animateFlip();
+    }
+
+    function rateCard(rate) {
+      const cards = getDeckCards();
+      const card = cards[currentIndex];
+      if (!card) return;
+      if (rate === 'good' || rate === 'easy') {
+        card.mastered = true;
+        card.level = rate === 'easy' ? 'Rất thuộc' : 'Đã nhớ';
+      } else {
+        card.mastered = false;
+        card.level = rate === 'again' ? 'Cần ôn lại' : 'Hơi khó';
+      }
+      saveData();
+      currentIndex = (currentIndex + 1) % cards.length;
+      isFlipped = false;
+      renderAll();
+    }
+
+    function switchView(view) {
+      currentView = view;
+      document.getElementById('studyView').classList.toggle('view-hidden', view !== 'study');
+      document.getElementById('bottomBar').classList.toggle('view-hidden', view !== 'study');
+      document.getElementById('manageView').classList.toggle('view-hidden', view !== 'manage');
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.view === view));
+    }
+
+    function openDrawer() {
+      document.getElementById('drawer').classList.add('open');
+      document.getElementById('drawerBackdrop').classList.add('open');
+    }
+    function closeDrawer() {
+      document.getElementById('drawer').classList.remove('open');
+      document.getElementById('drawerBackdrop').classList.remove('open');
+    }
+
+    document.getElementById('openDrawerBtn').onclick = openDrawer;
+    document.getElementById('closeDrawerBtn').onclick = closeDrawer;
+    document.getElementById('drawerBackdrop').onclick = closeDrawer;
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.onclick = () => { switchView(btn.dataset.view); closeDrawer(); };
+    });
+
+    document.getElementById('quickAddBtn').onclick = () => {
+      resetCardForm();
+      switchView(currentView === 'manage' ? 'study' : 'manage');
+    };
+
+    document.getElementById('flipBtn').onclick = flipCard;
+    document.getElementById('frontPlaceholder').onclick = flipCard;
+    document.getElementById('resetCardBtn').onclick = () => { isFlipped = !isFlipped; renderCard(); };
+    document.getElementById('prevBtn').onclick = () => { currentIndex--; isFlipped = false; renderCard(); };
+
+    // 4 nút loa tách riêng
+    const speakCurrentWord = () => { const c = getDeckCards()[currentIndex]; if (c) speak(c.word); };
+    const speakCurrentEnWord = () => { const c = getDeckCards()[currentIndex]; if (c && c.enWord) speak(c.enWord, 'en-US'); };
+    const speakCurrentExample = () => { const c = getDeckCards()[currentIndex]; if (c && c.example) speak(c.example); };
+    const speakCurrentEnExample = () => { const c = getDeckCards()[currentIndex]; if (c && c.enExample) speak(c.enExample, 'en-US'); };
+
+    document.getElementById('speakWordBtn').onclick = speakCurrentWord;
+    document.getElementById('speakEnWordBtn').onclick = speakCurrentEnWord;
+    document.getElementById('speakExampleBtn').onclick = speakCurrentExample;
+    document.getElementById('speakEnExampleBtn').onclick = speakCurrentEnExample;
+
+    document.querySelectorAll('[data-rate]').forEach(btn => btn.onclick = () => rateCard(btn.dataset.rate));
+
+    document.getElementById('addCardForm').onsubmit = (e) => {
+      e.preventDefault();
+      const editId = document.getElementById('editCardId').value;
+      const payload = {
+        deckId: document.getElementById('inDeck').value,
+        word: document.getElementById('inWord').value.trim(),
+        reading: document.getElementById('inReading').value.trim(),
+        meaning: document.getElementById('inMeaning').value.trim(),
+        enWord: document.getElementById('inEnWord').value.trim(),
+        enIpa: document.getElementById('inEnIpa').value.trim(),
+        enExample: document.getElementById('inEnExample').value.trim(),
+        tag: document.getElementById('inTag').value.trim() || 'Từ vựng',
+        note: document.getElementById('inNote').value.trim(),
+        example: document.getElementById('inExample').value.trim(),
+        exampleTrans: document.getElementById('inExampleTrans').value.trim()
+      };
+
+      if (editId) {
+        const idx = appData.cards.findIndex(c => String(c.id) === String(editId));
+        if (idx > -1) appData.cards[idx] = { ...appData.cards[idx], ...payload };
+      } else {
+        appData.cards.push({ id: nextId(), ...payload, mastered: false, level: 'Mới' });
+      }
+      currentDeckId = payload.deckId;
+      saveData();
+      resetCardForm();
+      renderAll();
+      alert(editId ? 'Đã cập nhật thẻ!' : 'Đã lưu thẻ mới!');
+    };
+
+    document.getElementById('bulkImportBtn').onclick = () => {
+      const raw = document.getElementById('bulkInput').value.trim();
+      if (!raw) return;
+      const lines = raw.split('\n').filter(l => l.trim());
+      let added = 0;
+      lines.forEach((line, i) => {
+        const p = line.split('|').map(s => s.trim());
+        if (p[0] && p[2]) {
+          appData.cards.push({
+            id: nextId(), deckId: currentDeckId,
+            word: p[0], reading: p[1] || '', meaning: p[2],
+            enWord: p[3] || '', enIpa: p[4] || '', note: p[5] || '',
+            example: p[6] || '', exampleTrans: p[7] || '', enExample: p[8] || '',
+            tag: 'Nhập nhanh', mastered: false, level: 'Mới'
+          });
+          added++;
+        }
+      });
+      if (added > 0) {
+        saveData();
+        document.getElementById('bulkInput').value = '';
+        renderAll();
+        alert(`Đã nhập thành công ${added} từ vựng!`);
+      }
+    };
+
+    // ===== VOICE MODAL =====
+    function syncVoiceModalUI() {
+      const eng = document.getElementById('ttsEngine').value;
+      document.getElementById('azureVoiceSection').classList.toggle('view-hidden', eng !== 'azure');
+      document.getElementById('browserVoiceSection').classList.toggle('view-hidden', eng !== 'browser');
+      document.getElementById('voicevoxSection').classList.toggle('view-hidden', eng !== 'voicevox');
+    }
+
+    document.getElementById('voiceModalBtn').onclick = () => {
+      populateBrowserVoices();
+      document.getElementById('ttsEngine').value = voiceCfg.engine;
+      document.getElementById('ttsRate').value = voiceCfg.rate;
+      document.getElementById('rateVal').textContent = voiceCfg.rate;
+      document.getElementById('azureVoiceJP').value = voiceCfg.azureVoiceJP;
+      document.getElementById('azureVoiceEN').value = voiceCfg.azureVoiceEN;
+      document.getElementById('azureKey').value = voiceCfg.azureKey;
+      document.getElementById('azureRegion').value = voiceCfg.azureRegion;
+      document.getElementById('voicevoxSpeaker').value = voiceCfg.voicevoxSpeaker;
+      syncVoiceModalUI();
+      document.getElementById('voiceModal').classList.remove('view-hidden');
+    };
+
+    document.getElementById('ttsEngine').onchange = syncVoiceModalUI;
+    document.getElementById('ttsRate').oninput = (e) => document.getElementById('rateVal').textContent = e.target.value;
+    document.getElementById('closeVoiceModalBtn').onclick = () => document.getElementById('voiceModal').classList.add('view-hidden');
+
+    function applyVoiceFormToCfg() {
+      voiceCfg.engine = document.getElementById('ttsEngine').value;
+      voiceCfg.browserVoiceJP = document.getElementById('browserVoiceJP').value;
+      voiceCfg.browserVoiceEN = document.getElementById('browserVoiceEN').value;
+      voiceCfg.rate = parseFloat(document.getElementById('ttsRate').value);
+      voiceCfg.azureVoiceJP = document.getElementById('azureVoiceJP').value;
+      voiceCfg.azureVoiceEN = document.getElementById('azureVoiceEN').value;
+      voiceCfg.azureKey = document.getElementById('azureKey').value.trim();
+      voiceCfg.azureRegion = document.getElementById('azureRegion').value.trim() || 'japaneast';
+      voiceCfg.voicevoxSpeaker = document.getElementById('voicevoxSpeaker').value;
+    }
+
+    document.getElementById('testJPBtn').onclick = () => {
+      applyVoiceFormToCfg();
+      speak('こんにちは。東京の標準語で発音しています。', 'ja-JP');
+    };
+
+    document.getElementById('testENBtn').onclick = () => {
+      applyVoiceFormToCfg();
+      speak('Authentication. Two-factor authentication is required to log in.', 'en-US');
+    };
+
+    document.getElementById('saveVoiceBtn').onclick = () => {
+      applyVoiceFormToCfg();
+      saveVoiceCfg();
+      document.getElementById('voiceModal').classList.add('view-hidden');
+    };
+
+    document.addEventListener('keydown', (e) => {
+      if (currentView !== 'study' || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+      if (e.code === 'Space') { e.preventDefault(); if (!isFlipped) flipCard(); }
+      else if (e.key.toLowerCase() === 'r') speakCurrentWord();
+      else if (e.key.toLowerCase() === 't' && isFlipped) speakCurrentEnWord();
+      else if (e.key.toLowerCase() === 'e' && isFlipped) speakCurrentExample();
+      else if (isFlipped) {
+        if (e.key === '1') rateCard('again');
+        if (e.key === '2') rateCard('hard');
+        if (e.key === '3') rateCard('good');
+        if (e.key === '4') rateCard('easy');
+      }    });
+
+    // =====================================================================
+    // ===== PWA: tiện ích, nhập file, Google Sheets sync, cảm ứng, init =====
+    // =====================================================================
+    const $ = (id) => document.getElementById(id);
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    }
+    let lastId = 0;
+    function nextId() { lastId = Math.max(lastId + 1, Date.now()); return lastId; }
+
+    let toastTimer;
+    function toast(msg) {
+      const t = $('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+    }
+
+    // ---------- CSV ----------
+    function parseCSV(text) {
+      text = text.replace(/^\uFEFF/, '');
+      const firstLine = text.split(/\r?\n/, 1)[0] || '';
+      let delim = ',', best = 1;
+      [',', ';', '\t'].forEach(d => { const n = firstLine.split(d).length; if (n > best) { best = n; delim = d; } });
+      const rows = []; let row = [], field = '', inQ = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inQ) {
+          if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+          else field += ch;
+        } else if (ch === '"') inQ = true;
+        else if (ch === delim) { row.push(field); field = ''; }
+        else if (ch === '\n' || ch === '\r') {
+          if (ch === '\r' && text[i + 1] === '\n') i++;
+          row.push(field); field = '';
+          if (row.some(c => c.trim() !== '')) rows.push(row);
+          row = [];
+        } else field += ch;
+      }
+      row.push(field);
+      if (row.some(c => c.trim() !== '')) rows.push(row);
+      return rows;
+    }
+
+    const FIELD_ORDER = ['deck', 'word', 'reading', 'meaning', 'enWord', 'enIpa', 'note', 'example', 'exampleTrans', 'enExample', 'tag'];
+    const HEADER_ALIASES = {
+      deck: ['deck', 'muc', 'bo', 'bothe', 'folder', 'category'],
+      word: ['word', 'tu', 'tuvung', 'tunhat', 'japanese', 'jp', 'kanji', 'term', 'front'],
+      reading: ['reading', 'cachdoc', 'kana', 'furigana'],
+      meaning: ['meaning', 'nghia', 'nghiaviet', 'nghiatiengviet', 'vietnamese', 'vi', 'back'],
+      enWord: ['enword', 'english', 'tienganh', 'tuanh', 'en'],
+      enIpa: ['enipa', 'ipa', 'phienam'],
+      note: ['note', 'hanviet', 'ghichu', 'hanvietghichu'],
+      example: ['example', 'vidu', 'cauvidu', 'vidunhat'],
+      exampleTrans: ['exampletrans', 'dichvidu', 'translation', 'trans'],
+      enExample: ['enexample', 'viduanh', 'viduenglish', 'viduta'],
+      tag: ['tag', 'loaitu', 'nhan', 'loaitunhan'],
+      lang: ['lang', 'language', 'ngonngu']
+    };
+    const ALIAS_LOOKUP = {};
+    Object.entries(HEADER_ALIASES).forEach(([f, list]) => list.forEach(a => ALIAS_LOOKUP[a] = f));
+    function normHeader(h) {
+      return String(h).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '');
+    }
+    function csvToRecords(text) {
+      const rows = parseCSV(text);
+      if (!rows.length) return [];
+      const mapped = rows[0].map(h => ALIAS_LOOKUP[normHeader(h)] || null);
+      const hasHeader = mapped.includes('word') && mapped.includes('meaning');
+      const cols = hasHeader ? mapped : FIELD_ORDER;
+      return rows.slice(hasHeader ? 1 : 0).map(r => {
+        const o = {};
+        cols.forEach((f, i) => { if (f && r[i] !== undefined) o[f] = r[i].trim(); });
+        return o;
+      });
+    }
+    function csvEscape(v) { v = String(v ?? ''); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+    function cardsToCSV() {
+      const head = [...FIELD_ORDER, 'lang'];
+      const lines = [head.join(',')];
+      appData.cards.forEach(c => {
+        const deck = appData.decks.find(d => d.id === c.deckId);
+        lines.push(head.map(f => csvEscape(f === 'deck' ? deck?.name : f === 'lang' ? deck?.lang : c[f])).join(','));
+      });
+      return '\uFEFF' + lines.join('\r\n');
+    }
+
+    // ---------- GỘP DỮ LIỆU (dùng cho nhập file + Sync) ----------
+    function normLang(l) {
+      l = String(l || '').trim().toLowerCase();
+      if (/^en/.test(l)) return 'en-US';
+      if (/^(ja|jp|nhat)/.test(l)) return 'ja-JP';
+      return '';
+    }
+    const MERGE_FIELDS = ['reading', 'meaning', 'enWord', 'enIpa', 'enExample', 'tag', 'note', 'example', 'exampleTrans'];
+    function mergeRecords(recs, defaultDeckName) {
+      const stat = { added: 0, updated: 0, skipped: 0, decksAdded: 0 };
+      const index = new Map();
+      appData.cards.forEach(c => index.set(c.deckId + '|' + c.word, c));
+      recs.forEach(r => {
+        const word = String(r.word ?? '').trim(), meaning = String(r.meaning ?? '').trim();
+        if (!word || !meaning) { stat.skipped++; return; }
+        const deckName = String(r.deck || defaultDeckName || 'Nhập từ file').trim();
+        let deck = appData.decks.find(d => d.name.trim().toLowerCase() === deckName.toLowerCase());
+        if (!deck) {
+          deck = {
+            id: 'deck_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            name: deckName,
+            color: r.color || DECK_COLORS[appData.decks.length % DECK_COLORS.length],
+            lang: normLang(r.lang) || (/[\u3040-\u30ff\u4e00-\u9fff]/.test(word) ? 'ja-JP' : 'en-US')
+          };
+          appData.decks.push(deck);
+          stat.decksAdded++;
+        }
+        const key = deck.id + '|' + word;
+        const ex = index.get(key);
+        if (ex) {
+          let changed = false;
+          MERGE_FIELDS.forEach(f => {
+            if (r[f] === undefined) return;
+            const v = String(r[f]).trim();
+            if (f === 'tag' && !v) return;
+            if (ex[f] !== v) { ex[f] = v; changed = true; }
+          });
+          if (changed) stat.updated++;
+        } else {
+          const card = {
+            id: nextId(), deckId: deck.id, word,
+            reading: String(r.reading ?? '').trim(), meaning,
+            enWord: String(r.enWord ?? '').trim(), enIpa: String(r.enIpa ?? '').trim(),
+            enExample: String(r.enExample ?? '').trim(),
+            tag: String(r.tag ?? '').trim() || 'Từ vựng',
+            note: String(r.note ?? '').trim(), example: String(r.example ?? '').trim(),
+            exampleTrans: String(r.exampleTrans ?? '').trim(),
+            mastered: r.mastered === true, level: r.level || 'Mới'
+          };
+          appData.cards.push(card);
+          index.set(key, card);
+          stat.added++;
+        }
+      });
+      return stat;
+    }
+    function statText(s) {
+      return `+${s.added} mới • ${s.updated} cập nhật` + (s.decksAdded ? ` • ${s.decksAdded} mục mới` : '') + (s.skipped ? ` • bỏ qua ${s.skipped} dòng thiếu từ/nghĩa` : '');
+    }
+
+    function jsonToRecords(obj) {
+      if (Array.isArray(obj)) return obj.map(c => ({ ...c, deck: c.deck || c.deckName }));
+      if (obj && Array.isArray(obj.cards)) {
+        const byId = {};
+        (obj.decks || []).forEach(d => byId[d.id] = d);
+        return obj.cards.map(c => {
+          const d = byId[c.deckId] || {};
+          return { ...c, deck: c.deck || c.deckName || d.name, lang: c.lang || d.lang, color: d.color };
+        });
+      }
+      throw new Error('JSON không đúng định dạng (cần mảng thẻ hoặc {decks, cards})');
+    }
+
+    async function importFiles(fileList) {
+      const files = Array.from(fileList || []);
+      if (!files.length) return;
+      const total = { added: 0, updated: 0, skipped: 0, decksAdded: 0 };
+      let ok = 0;
+      for (const f of files) {
+        try {
+          const text = await f.text();
+          const isJson = /\.json$/i.test(f.name) || f.type === 'application/json' || /^\s*[\[{]/.test(text);
+          const recs = isJson ? jsonToRecords(JSON.parse(text.replace(/^\uFEFF/, ''))) : csvToRecords(text);
+          const s = mergeRecords(recs, getCurrentDeck()?.name);
+          Object.keys(total).forEach(k => total[k] += s[k]);
+          ok++;
+        } catch (err) {
+          toast(`⚠ ${f.name}: ${err.message}`);
+          console.error(err);
+        }
+      }
+      if (ok) {
+        await saveData();
+        renderAll();
+        refreshDataStats();
+        toast(`📥 Đã nhập ${ok} file: ${statText(total)}`);
+      }
+    }
+
+    // ---------- GOOGLE SHEETS SYNC ----------
+    let sheetUrl = '';
+    function normalizeSheetUrl(u) {
+      u = (u || '').trim();
+      if (!u) return '';
+      const edit = u.match(/docs\.google\.com\/spreadsheets\/d\/([^/]+)\/(?:edit|view)/);
+      if (edit && !/\/d\/e\//.test(u)) {
+        const gid = (u.match(/[#&?]gid=(\d+)/) || [])[1];
+        return `https://docs.google.com/spreadsheets/d/${edit[1]}/export?format=csv` + (gid ? `&gid=${gid}` : '');
+      }
+      if (/\/pub(\?|$)/.test(u)) {
+        if (/output=\w+/.test(u)) return u.replace(/output=\w+/, 'output=csv');
+        return u + (u.includes('?') ? '&' : '?') + 'output=csv';
+      }
+      return u;
+    }
+
+    let syncing = false;
+    async function syncSheet() {
+      const url = normalizeSheetUrl(sheetUrl);
+      if (!url) { openDataModal(); toast('Dán link Google Sheets (publish CSV) rồi bấm Sync'); return; }
+      if (!navigator.onLine) { toast('📴 Đang offline — cần có mạng để Sync. Dữ liệu offline vẫn dùng bình thường.'); return; }
+      if (syncing) return;
+      syncing = true;
+      document.querySelectorAll('.sync-icon').forEach(e => e.classList.add('spin'));
+      try {
+        const res = await fetch(url + (url.includes('?') ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' — kiểm tra lại link publish');
+        const text = await res.text();
+        if (/^\s*<(!doctype|html)/i.test(text)) throw new Error('Link trả về trang web, hãy chọn Publish dạng CSV');
+        const stat = mergeRecords(csvToRecords(text), 'Google Sheets');
+        await saveData();
+        const when = new Date().toLocaleString('vi-VN');
+        await metaSet('lastSync', when);
+        renderAll();
+        refreshDataStats();
+        toast(`✅ Sync xong: ${statText(stat)}`);
+      } catch (err) {
+        console.error(err);
+        toast('⚠ Sync lỗi: ' + (err.message || err));
+      } finally {
+        syncing = false;
+        document.querySelectorAll('.sync-icon').forEach(e => e.classList.remove('spin'));
+      }
+    }
+
+    async function refreshDataStats() {
+      $('dataStats').textContent = `${appData.decks.length} mục • ${appData.cards.length} thẻ • lưu trong IndexedDB` + (navigator.onLine ? '' : ' • đang offline');
+      const last = await metaGet('lastSync');
+      $('lastSyncText').textContent = last ? `Lần sync gần nhất: ${last}` : 'Chưa sync lần nào.';
+    }
+    async function openDataModal() {
+      $('sheetUrlInput').value = sheetUrl;
+      await refreshDataStats();
+      $('dataModal').classList.remove('view-hidden');
+    }
+    function closeDataModal() { $('dataModal').classList.add('view-hidden'); }
+
+    $('syncBtn').onclick = syncSheet;
+    $('openDataBtn').onclick = () => { closeDrawer(); openDataModal(); };
+    $('openDataFromManage').onclick = openDataModal;
+    $('closeDataModalBtn').onclick = closeDataModal;
+    $('dataModal').addEventListener('click', (e) => { if (e.target === $('dataModal')) closeDataModal(); });
+    $('syncNowBtn').onclick = async () => {
+      sheetUrl = $('sheetUrlInput').value.trim();
+      await metaSet('sheetUrl', sheetUrl);
+      syncSheet();
+    };
+    $('saveSheetBtn').onclick = async () => {
+      sheetUrl = $('sheetUrlInput').value.trim();
+      await metaSet('sheetUrl', sheetUrl);
+      toast('💾 Đã lưu link Google Sheets');
+    };
+
+    // ---------- NHẬP FILE (chọn file + kéo thả) ----------
+    $('fileInput').onchange = async (e) => { await importFiles(e.target.files); e.target.value = ''; };
+    const dz = $('dropZone');
+    ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('over'); }));
+    ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, () => dz.classList.remove('over')));
+
+    let dragDepth = 0;
+    const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+    window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; $('dropOverlay').classList.remove('view-hidden'); });
+    window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+    window.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $('dropOverlay').classList.add('view-hidden'); });
+    window.addEventListener('drop', async (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth = 0;
+      $('dropOverlay').classList.add('view-hidden');
+      await importFiles(e.dataTransfer.files);
+    });
+
+    // ---------- XUẤT / SAO LƯU ----------
+    function downloadFile(name, text, mime) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: mime }));
+      a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+    const stamp = () => new Date().toISOString().slice(0, 10);
+    $('exportJsonBtn').onclick = () => downloadFile(`vocab-backup-${stamp()}.json`, JSON.stringify({ version: 1, decks: appData.decks, cards: appData.cards }, null, 2), 'application/json');
+    $('exportCsvBtn').onclick = () => downloadFile(`vocab-${stamp()}.csv`, cardsToCSV(), 'text/csv');
+
+    // ---------- CẢM ỨNG: chạm lật thẻ, vuốt đổi thẻ ----------
+    function animateFlip() {
+      const box = $('notebookBox');
+      if (box.animate) box.animate(
+        [{ transform: 'perspective(700px) rotateX(-80deg)', opacity: 0.2 }, { transform: 'perspective(700px) rotateX(0)', opacity: 1 }],
+        { duration: 280, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    }
+    function goCard(step) {
+      const n = getDeckCards().length;
+      if (!n) return;
+      currentIndex = (currentIndex + step + n) % n;
+      isFlipped = false;
+      renderCard();
+    }
+    (function setupGestures() {
+      const panel = $('flashcardPanel');
+      let sx = 0, sy = 0, dx = 0, tracking = false, axis = null, suppressClick = false;
+      panel.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1 || e.target.closest('button, input, select, textarea, .step-circles')) { tracking = false; return; }
+        sx = e.touches[0].clientX; sy = e.touches[0].clientY; dx = 0; axis = null; tracking = true;
+        panel.style.transition = 'none';
+      }, { passive: true });
+      panel.addEventListener('touchmove', (e) => {
+        if (!tracking) return;
+        const mx = e.touches[0].clientX - sx, my = e.touches[0].clientY - sy;
+        if (!axis && (Math.abs(mx) > 10 || Math.abs(my) > 10)) axis = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
+        if (axis === 'x') {
+          dx = mx;
+          panel.style.transform = `translateX(${dx}px) rotate(${dx / 35}deg)`;
+          panel.style.opacity = String(1 - Math.min(Math.abs(dx) / 450, 0.45));
+        }
+      }, { passive: true });
+      const end = () => {
+        if (!tracking) return;
+        tracking = false;
+        if (axis !== 'x') return;
+        suppressClick = true;
+        setTimeout(() => suppressClick = false, 350);
+        const dir = dx < 0 ? -1 : 1;
+        if (Math.abs(dx) > 70) {
+          panel.style.transition = 'transform .16s ease-in, opacity .16s ease-in';
+          panel.style.transform = `translateX(${dir * window.innerWidth * 0.8}px) rotate(${dir * 12}deg)`;
+          panel.style.opacity = '0';
+          if (navigator.vibrate) navigator.vibrate(8);
+          setTimeout(() => {
+            goCard(dir < 0 ? 1 : -1);
+            panel.style.transition = 'none';
+            panel.style.transform = `translateX(${-dir * 50}px)`;
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+              panel.style.transition = 'transform .22s cubic-bezier(.2,.8,.2,1), opacity .22s';
+              panel.style.transform = ''; panel.style.opacity = '';
+            }));
+          }, 160);
+        } else {
+          panel.style.transition = 'transform .2s ease-out, opacity .2s';
+          panel.style.transform = ''; panel.style.opacity = '';
+        }
+      };
+      panel.addEventListener('touchend', end);
+      panel.addEventListener('touchcancel', end);
+
+      // Chạm vào thẻ để lật
+      panel.addEventListener('click', (e) => {
+        if (suppressClick) return;
+        if (e.target.closest('button, input, select, textarea, .step-circles, #frontPlaceholder')) return;
+        if (window.getSelection && String(window.getSelection()).length) return;
+        if (!getDeckCards()[currentIndex]) return;
+        isFlipped = !isFlipped;
+        renderCard();
+        animateFlip();
+      });
+    })();
+
+    document.addEventListener('keydown', (e) => {
+      if (currentView !== 'study' || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+      if (e.key === 'ArrowRight') goCard(1);
+      else if (e.key === 'ArrowLeft') goCard(-1);
+    });
+
+    // ---------- ONLINE / OFFLINE + CÀI APP ----------
+    function updateOnlineState() { document.body.classList.toggle('is-offline', !navigator.onLine); }
+    window.addEventListener('online', () => { updateOnlineState(); toast('🌐 Đã có mạng — có thể bấm Sync'); });
+    window.addEventListener('offline', () => { updateOnlineState(); toast('📴 Đang offline — app vẫn dùng bình thường'); });
+    updateOnlineState();
+
+    let deferredInstall = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstall = e;
+      $('installBtn').classList.remove('view-hidden');
+    });
+    $('installBtn').onclick = async () => {
+      if (!deferredInstall) return;
+      deferredInstall.prompt();
+      await deferredInstall.userChoice;
+      deferredInstall = null;
+      $('installBtn').classList.add('view-hidden');
+    };
+    window.addEventListener('appinstalled', () => toast('✅ Đã cài app'));
+
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js').catch(err => console.warn('SW lỗi:', err));
+      });
+    }
+
+    // ---------- KHỞI TẠO: nạp từ IndexedDB ----------
+    async function initApp() {
+      try {
+        db = await openDB();
+      } catch (err) {
+        console.warn('IndexedDB không dùng được, dùng localStorage tạm:', err);
+        db = null;
+      }
+
+      let loaded = false;
+      if (db) {
+        const decks = await idbGetAll('decks');
+        const cards = await idbGetAll('cards');
+        if (decks.length) {
+          decks.sort((a, b) => (a._order ?? 0) - (b._order ?? 0));
+          decks.forEach(d => delete d._order);
+          cards.sort((a, b) => a.id - b.id);
+          appData = { decks, cards };
+          loaded = true;
+        }
+      }
+      if (!loaded) {
+        // Lần chạy đầu: chuyển dữ liệu cũ từ localStorage (nếu có), nếu không thì dùng bộ từ mặc định
+        let legacy = null;
+        try { legacy = JSON.parse(localStorage.getItem('soft_vocab_v1')); } catch (e) {}
+        appData = (legacy && Array.isArray(legacy.decks) && Array.isArray(legacy.cards) && legacy.decks.length)
+          ? legacy : JSON.parse(JSON.stringify(DEFAULT_DATA));
+        await saveData();
+      }
+      if (applySamplePatch()) await saveData();
+
+      lastId = appData.cards.reduce((m, c) => (typeof c.id === 'number' && c.id > m ? c.id : m), 0);
+      sheetUrl = (await metaGet('sheetUrl')) || '';
+      currentDeckId = appData.decks[0]?.id || '';
+      currentIndex = 0;
+      renderAll();
+
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    }
+    initApp();
+  </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "id": "./",
+  "name": "Vocab Design — JP + EN + VI Flashcards",
+  "short_name": "Vocab",
+  "description": "Flashcard từ vựng Nhật – Anh – Việt, hoạt động offline, đồng bộ từ Google Sheets.",
+  "lang": "vi",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F7F5EE",
+  "theme_color": "#F7F5EE",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
