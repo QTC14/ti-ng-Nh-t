@@ -901,17 +901,14 @@
       <div class="subtitle-line" id="dataStats" style="margin-bottom:0;">—</div>
 
       <div class="data-sec">
-        <h4>☁ Đồng bộ Google Sheets (1 chiều)</h4>
+        <h4>☁ Đồng bộ Google Sheets (Apps Script)</h4>
         <p>
-          Trên máy tính: mở Sheet → <b>File → Share → Publish to web</b> → chọn sheet → định dạng <b>CSV</b> → Publish → copy link dán vào đây.
-          Dòng đầu là tiêu đề cột: <code>deck</code> <code>word</code> <code>reading</code> <code>meaning</code> <code>enWord</code> <code>enIpa</code> <code>note</code> <code>example</code> <code>exampleTrans</code> <code>enExample</code> <code>tag</code>.
-          Từ mới sẽ được thêm, từ đã có (cùng mục + cùng từ) sẽ được cập nhật; tiến độ học được giữ nguyên, không xóa thẻ nào.
+          Dán duy nhất link <b>Google Apps Script Web App</b> (đuôi <code>/exec</code>). Khi bấm <b>Sync ngay</b>, app tự tải toàn bộ các tab bài học (Bài 1, Bài 2…) và từ vựng mới nhất, tự tạo thanh chọn bài mà vẫn giữ nguyên tiến độ học cũ.
         </p>
-                <label class="form-label">Tên sách (mục lớn)</label>
+        <label class="form-label">Tên sách mặc định (nếu Web App không trả về tên sách)</label>
         <input class="form-input" id="bookNameInput" placeholder="VD: Từ vựng Tiếng Nhật - Anh" style="margin-bottom:10px;" />
-        <label class="form-label">Các trang tính = các bài (mỗi dòng: <code>Tên bài | link</code>)</label>
-        <textarea class="form-textarea" id="sheetUrlInput" rows="5" wrap="off" style="font-size:12px;" placeholder="Bài 1 | https://docs.google.com/spreadsheets/d/e/.../pub?gid=0&single=true&output=csv&#10;Bài 2 | 1234567890"></textarea>
-        <p style="margin-top:6px;">Mỗi tab trong Sheet (Bài 1, Bài 2…) là 1 bài trong sách. Thêm tab mới thì thêm 1 dòng: <code>Bài 2 | gid</code> (gid là số sau <code>#gid=</code> trên thanh địa chỉ khi bấm vào tab đó; dùng chung link gốc ở dòng đầu). Nên Publish <b>Toàn bộ tài liệu</b> để mọi tab đều lấy được.</p>
+        <label class="form-label">Link Google Apps Script Web App (hoặc CSV)</label>
+        <input class="form-input" id="sheetUrlInput" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec" />
         <div class="row-btns">
           <button class="btn" id="saveSheetBtn">💾 Lưu link</button>
           <button class="btn btn-primary" id="syncNowBtn"><span class="sync-icon">⟳</span> Sync ngay</button>
@@ -1305,20 +1302,34 @@
       const all = getBookCards();
       if (!currentLesson) return all;
       const f = all.filter(c => (c.lesson || '') === currentLesson);
-      if (!f.length) { currentLesson = ''; return all; }
+      if (!f.length) {
+        const known = getCurrentDeck()?.lessons || [];
+        if (known.includes(currentLesson)) return [];
+        currentLesson = '';
+        return all;
+      }
       return f;
     }
     let lessonNames = [];
     function renderLessonBar() {
       getDeckCards(); // tự reset bài nếu không còn thuộc sách này
       const all = getBookCards();
+      const deck = getCurrentDeck();
       const count = new Map();
       all.forEach(c => { const l = c.lesson || ''; count.set(l, (count.get(l) || 0) + 1); });
-      lessonNames = [...count.keys()].filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      const ordered = [];
+      const seen = new Set();
+      (deck?.lessons || []).forEach(l => {
+        const s = String(l || '').trim();
+        if (s && !seen.has(s)) { seen.add(s); ordered.push(s); }
+      });
+      const extras = [...count.keys()].filter(l => l && !seen.has(l))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      lessonNames = [...ordered, ...extras];
       document.getElementById('lessonBar').classList.toggle('view-hidden', lessonNames.length === 0);
       const sel = document.getElementById('lessonSelect');
       sel.innerHTML = `<option value="">Tất cả bài (${all.length})</option>` +
-        lessonNames.map(n => `<option value="${esc(n)}">${esc(n)} (${count.get(n)})</option>`).join('');
+        lessonNames.map(n => `<option value="${esc(n)}">${esc(n)} (${count.get(n) || 0})</option>`).join('');
       sel.value = currentLesson;
       document.getElementById('lessonList').innerHTML = lessonNames.map(n => `<option value="${esc(n)}"></option>`).join('');
     }
@@ -1529,6 +1540,7 @@
         `;
         item.onclick = () => {
           currentDeckId = deck.id;
+          currentLesson = '';
           currentIndex = 0;
           isFlipped = false;
           renderAll();
@@ -1557,15 +1569,20 @@
       document.getElementById('lblNote').textContent = isDeckEN ? 'ĐỒNG NGHĨA / GHI CHÚ' : 'HÁN VIỆT / GHI CHÚ';
 
       if (!deck || cards.length === 0) {
-        document.getElementById('deckBreadcrumb').textContent = `${deck ? deck.name : ''} / 0 thẻ`;
-        document.getElementById('wordTitle').textContent = 'Mục này chưa có thẻ';
+        document.getElementById('deckBreadcrumb').textContent = `${deck ? deck.name : ''}${currentLesson ? '  ›  ' + currentLesson : ''} / 0 thẻ`;
+        document.getElementById('wordTitle').textContent = currentLesson ? `${currentLesson} chưa có thẻ` : 'Mục này chưa có thẻ';
         document.getElementById('pillRow').innerHTML = '';
         document.getElementById('stepCircles').innerHTML = '';
         document.getElementById('stepCounter').textContent = '0 / 0';
+        document.getElementById('valReading').textContent = '—';
+        document.getElementById('valNote').textContent = '—';
+        document.getElementById('valStatus').textContent = '—';
         document.getElementById('speakWordBtn').classList.add('view-hidden');
         document.getElementById('frontPlaceholder').innerHTML = 'Bấm nút <b>＋</b> ở góc trên để thêm từ vựng vào mục này.';
         document.getElementById('frontPlaceholder').classList.remove('view-hidden');
         document.getElementById('backContent').classList.add('view-hidden');
+        document.getElementById('frontActions').classList.remove('view-hidden');
+        document.getElementById('backActions').classList.add('view-hidden');
         return;
       }
 
@@ -1980,18 +1997,18 @@
 
     const FIELD_ORDER = ['deck', 'word', 'reading', 'meaning', 'enWord', 'enIpa', 'note', 'example', 'exampleTrans', 'enExample', 'tag', 'lesson'];
     const HEADER_ALIASES = {
-      lesson: ['lesson', 'bai', 'baihoc', 'unit', 'chapter'],
-      deck: ['deck', 'muc', 'bo', 'bothe', 'folder', 'category'],
-      word: ['word', 'tu', 'tuvung', 'tunhat', 'japanese', 'jp', 'kanji', 'term', 'front'],
-      reading: ['reading', 'cachdoc', 'kana', 'furigana'],
-      meaning: ['meaning', 'nghia', 'nghiaviet', 'nghiatiengviet', 'vietnamese', 'vi', 'back'],
-      enWord: ['enword', 'english', 'tienganh', 'tuanh', 'en'],
-      enIpa: ['enipa', 'ipa', 'phienam'],
-      note: ['note', 'hanviet', 'ghichu', 'hanvietghichu'],
-      example: ['example', 'vidu', 'cauvidu', 'vidunhat'],
-      exampleTrans: ['exampletrans', 'dichvidu', 'translation', 'trans'],
-      enExample: ['enexample', 'viduanh', 'viduenglish', 'viduta'],
-      tag: ['tag', 'loaitu', 'nhan', 'loaitunhan'],
+      lesson: ['lesson', 'bai', 'baihoc', 'unit', 'chapter', 'sheet', 'sheetname', 'tab', 'tabname'],
+      deck: ['deck', 'muc', 'bo', 'bothe', 'folder', 'category', 'book', 'sach', 'tensach'],
+      word: ['word', 'tu', 'tuvung', 'tunhat', 'japanese', 'jp', 'kanji', 'term', 'front', 'vocab', 'vocabulary'],
+      reading: ['reading', 'cachdoc', 'kana', 'furigana', 'hiragana', 'pronunciation'],
+      meaning: ['meaning', 'nghia', 'nghiaviet', 'nghiatiengviet', 'vietnamese', 'vi', 'back', 'definition'],
+      enWord: ['enword', 'english', 'tienganh', 'tuanh', 'en', 'englishword'],
+      enIpa: ['enipa', 'ipa', 'phienam', 'phienamipa'],
+      note: ['note', 'hanviet', 'ghichu', 'hanvietghichu', 'memo', 'notes'],
+      example: ['example', 'vidu', 'cauvidu', 'vidunhat', 'examplejp'],
+      exampleTrans: ['exampletrans', 'dichvidu', 'translation', 'trans', 'viduviet'],
+      enExample: ['enexample', 'viduanh', 'viduenglish', 'viduta', 'exampleen'],
+      tag: ['tag', 'tags', 'loaitu', 'nhan', 'loaitunhan', 'pos'],
       lang: ['lang', 'language', 'ngonngu']
     };
     const ALIAS_LOOKUP = {};
@@ -1999,17 +2016,19 @@
     function normHeader(h) {
       return String(h).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '');
     }
-    function csvToRecords(text) {
-      const rows = parseCSV(text);
-      if (!rows.length) return [];
+    function rowsToRecords(rows) {
+      if (!rows || !rows.length) return [];
       const mapped = rows[0].map(h => ALIAS_LOOKUP[normHeader(h)] || null);
       const hasHeader = mapped.includes('word') && mapped.includes('meaning');
       const cols = hasHeader ? mapped : FIELD_ORDER;
       return rows.slice(hasHeader ? 1 : 0).map(r => {
         const o = {};
-        cols.forEach((f, i) => { if (f && r[i] !== undefined) o[f] = r[i].trim(); });
+        cols.forEach((f, i) => { if (f && r[i] !== undefined && r[i] !== null) o[f] = String(r[i]).trim(); });
         return o;
       });
+    }
+    function csvToRecords(text) {
+      return rowsToRecords(parseCSV(text));
     }
     function csvEscape(v) { v = String(v ?? ''); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
     function cardsToCSV() {
@@ -2107,6 +2126,130 @@
       throw new Error('JSON không đúng định dạng (cần mảng thẻ hoặc {decks, cards})');
     }
 
+    const CANONICAL_KEYS = new Set(['deck', 'lesson', 'word', 'reading', 'meaning', 'enWord', 'enIpa', 'note', 'example', 'exampleTrans', 'enExample', 'tag', 'lang', 'mastered', 'level', 'color', 'deckName', 'deckId']);
+    function normalizeRecordObj(raw) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+      const o = {};
+      Object.keys(raw).forEach(k => {
+        const target = CANONICAL_KEYS.has(k) ? k : (ALIAS_LOOKUP[normHeader(k)] || null);
+        if (!target) return;
+        const val = raw[k];
+        if (val === undefined || val === null) return;
+        if (target === 'mastered' || typeof val === 'boolean') o[target] = val;
+        else o[target] = String(val).trim();
+      });
+      if (!o.deck && o.deckName) o.deck = o.deckName;
+      return o;
+    }
+
+    function arrayToRecordsWithLesson(arr, lessonName, book) {
+      if (!Array.isArray(arr) || !arr.length) return [];
+      if (Array.isArray(arr[0])) {
+        return rowsToRecords(arr).map(r => ({
+          ...r,
+          deck: r.deck || book,
+          lesson: r.lesson || lessonName || undefined
+        }));
+      }
+      return arr.map(item => {
+        const r = normalizeRecordObj(item);
+        if (!r) return null;
+        return {
+          ...r,
+          deck: r.deck || book,
+          lesson: r.lesson || lessonName || undefined
+        };
+      }).filter(Boolean);
+    }
+
+    function gasPayloadToRecords(obj, fallbackBook) {
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        if (obj.error) throw new Error(String(obj.error));
+        if (obj.data && typeof obj.data === 'object' && !Array.isArray(obj.data)) obj = obj.data;
+      }
+      let book = fallbackBook;
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        const b = obj.book || obj.bookName || obj.spreadsheetName || obj.title || obj.name;
+        if (typeof b === 'string' && b.trim()) book = b.trim();
+      }
+      const lessons = [];
+      const pushLesson = (l) => {
+        const s = String(l || '').trim();
+        if (s && !lessons.includes(s)) lessons.push(s);
+      };
+
+      // Định dạng sao lưu { decks: [...], cards: [...] }
+      if (obj && !Array.isArray(obj) && Array.isArray(obj.decks) && Array.isArray(obj.cards)) {
+        const records = jsonToRecords(obj);
+        records.forEach(r => pushLesson(r.lesson));
+        return { book, lessons, records };
+      }
+
+      // Định dạng { lessons / tabs / sheets: [...] }
+      const tabArr = obj && !Array.isArray(obj) && (obj.lessons || obj.tabs || obj.sheets);
+      if (Array.isArray(tabArr)) {
+        if (tabArr.every(x => typeof x === 'string')) {
+          tabArr.forEach(pushLesson);
+          const flat = obj.cards || obj.words || obj.items || obj.data || [];
+          const records = arrayToRecordsWithLesson(flat, '', book);
+          records.forEach(r => pushLesson(r.lesson));
+          return { book, lessons, records };
+        }
+        const records = [];
+        tabArr.forEach(tab => {
+          if (!tab || typeof tab !== 'object') return;
+          const lname = tab.lesson || tab.name || tab.title || tab.sheet || tab.sheetName || tab.tab || '';
+          pushLesson(lname);
+          const list = tab.cards || tab.words || tab.rows || tab.items || tab.data || tab.values || [];
+          records.push(...arrayToRecordsWithLesson(list, lname, book));
+        });
+        return { book, lessons, records };
+      }
+
+      // Định dạng { cards / words / items / data: [...] }
+      const flatArr = obj && !Array.isArray(obj) && (obj.cards || obj.words || obj.items || obj.data);
+      if (Array.isArray(flatArr)) {
+        const records = arrayToRecordsWithLesson(flatArr, '', book);
+        records.forEach(r => pushLesson(r.lesson));
+        return { book, lessons, records };
+      }
+
+      // Định dạng mảng ở gốc
+      if (Array.isArray(obj)) {
+        if (!obj.length) return { book, lessons: [], records: [] };
+        if (obj[0] && typeof obj[0] === 'object' && !Array.isArray(obj[0]) &&
+            (obj[0].cards || obj[0].words || obj[0].rows || obj[0].items || obj[0].data || obj[0].values)) {
+          const records = [];
+          obj.forEach(tab => {
+            const lname = tab.lesson || tab.name || tab.title || tab.sheet || tab.sheetName || tab.tab || '';
+            pushLesson(lname);
+            const list = tab.cards || tab.words || tab.rows || tab.items || tab.data || tab.values || [];
+            records.push(...arrayToRecordsWithLesson(list, lname, book));
+          });
+          return { book, lessons, records };
+        }
+        const records = arrayToRecordsWithLesson(obj, '', book);
+        records.forEach(r => pushLesson(r.lesson));
+        return { book, lessons, records };
+      }
+
+      // Định dạng map theo tên tab: { "Bài 1": [...], "Bài 2": [...] }
+      if (obj && typeof obj === 'object') {
+        const records = [];
+        let foundMap = false;
+        Object.entries(obj).forEach(([k, v]) => {
+          if (Array.isArray(v)) {
+            foundMap = true;
+            pushLesson(k);
+            records.push(...arrayToRecordsWithLesson(v, k, book));
+          }
+        });
+        if (foundMap) return { book, lessons, records };
+      }
+
+      throw new Error('JSON từ Apps Script chưa đúng cấu trúc');
+    }
+
     async function importFiles(fileList) {
       const files = Array.from(fileList || []);
       if (!files.length) return;
@@ -2116,7 +2259,9 @@
         try {
           const text = await f.text();
           const isJson = /\.json$/i.test(f.name) || f.type === 'application/json' || /^\s*[\[{]/.test(text);
-          const recs = isJson ? jsonToRecords(JSON.parse(text.replace(/^\uFEFF/, ''))) : csvToRecords(text);
+          const recs = isJson
+            ? gasPayloadToRecords(JSON.parse(text.replace(/^\uFEFF/, '')), getCurrentDeck()?.name || DEFAULT_BOOK).records
+            : csvToRecords(text);
           const s = mergeRecords(recs, getCurrentDeck()?.name);
           Object.keys(total).forEach(k => total[k] += s[k]);
           ok++;
@@ -2133,38 +2278,22 @@
       }
     }
 
-    // ---------- GOOGLE SHEETS SYNC ----------
-    // Link Google Sheets CSV mặc định (có thể đổi trong mục 🗄 Dữ liệu)
-    // Nguồn Sync mặc định. Mỗi dòng = 1 trang tính (tab) = 1 bài:  Tên bài | link CSV (hoặc chỉ gid)
+    // ---------- GOOGLE SHEETS / APPS SCRIPT SYNC ----------
     const DEFAULT_BOOK = 'Từ vựng Tiếng Nhật - Anh';
-    const DEFAULT_SHEET_URL = 'Bài 1 | https://docs.google.com/spreadsheets/d/e/2PACX-1vTnct0ssuMfWTSYhg0PCMJ9GO9IzL3BT3gpwMqF4nA_EJ_6yAhcXuILwYH3lfs713xlUMe6dYlDYQZ0/pub?gid=0&single=true&output=csv';
-    const OLD_DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnct0ssuMfWTSYhg0PCMJ9GO9IzL3BT3gpwMqF4nA_EJ_6yAhcXuILwYH3lfs713xlUMe6dYlDYQZ0/pub?gid=0&single=true&output=csv';
+    const DEFAULT_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzaHsOiM-zhT7uQ9ZO9hKkJyHFpM1EvK-8xRQeBBdWh3OxSjRqtT1Y6i-I3Zp2CkboN/exec';
+    const OLD_DEFAULT_URLS = [
+      'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnct0ssuMfWTSYhg0PCMJ9GO9IzL3BT3gpwMqF4nA_EJ_6yAhcXuILwYH3lfs713xlUMe6dYlDYQZ0/pub?gid=0&single=true&output=csv',
+      'Bài 1 | https://docs.google.com/spreadsheets/d/e/2PACX-1vTnct0ssuMfWTSYhg0PCMJ9GO9IzL3BT3gpwMqF4nA_EJ_6yAhcXuILwYH3lfs713xlUMe6dYlDYQZ0/pub?gid=0&single=true&output=csv'
+    ];
     let bookName = DEFAULT_BOOK;
     let sheetUrl = '';
 
-    // Tách textarea thành danh sách nguồn: [{lesson, book?, url}]
-    function parseSources(text) {
-      const out = [];
-      let base = '';
-      String(text || '').split(/\r?\n/).forEach(raw => {
-        const line = raw.trim();
-        if (!line) return;
-        let label = '', target = line;
-        const bar = line.lastIndexOf('|');
-        if (bar >= 0) { label = line.slice(0, bar).trim(); target = line.slice(bar + 1).trim(); }
-        let url;
-        if (/^(gid=)?\d+$/i.test(target)) {
-          if (!base) return;
-          const gid = target.replace(/\D/g, '');
-          url = /gid=\d+/.test(base) ? base.replace(/gid=\d+/, 'gid=' + gid) : base + (base.includes('?') ? '&' : '?') + 'gid=' + gid;
-        } else url = target;
-        if (/^https?:\/\//i.test(url)) { if (!base) base = url; out.push({ label, url: normalizeSheetUrl(url) }); }
-      });
-      return out;
-    }
     function normalizeSheetUrl(u) {
       u = (u || '').trim();
       if (!u) return '';
+      // Giữ tương thích nếu người dùng từng lưu dạng "Tên bài | link"
+      const bar = u.lastIndexOf('|');
+      if (bar >= 0 && /https?:\/\//i.test(u.slice(bar + 1))) u = u.slice(bar + 1).trim();
       const edit = u.match(/docs\.google\.com\/spreadsheets\/d\/([^/]+)\/(?:edit|view)/);
       if (edit && !/\/d\/e\//.test(u)) {
         const gid = (u.match(/[#&?]gid=(\d+)/) || [])[1];
@@ -2178,50 +2307,84 @@
     }
 
     let syncing = false;
-    async function syncSheet() {
-      const sources = parseSources(sheetUrl);
-      if (!sources.length) { openDataModal(); toast('Dán link Google Sheets (publish CSV) rồi bấm Sync'); return; }
+    async function syncSheet(isFirstAuto = false) {
+      const url = normalizeSheetUrl(sheetUrl);
+      if (!url) { openDataModal(); toast('Dán link Apps Script Web App (/exec) rồi bấm Sync'); return; }
       if (!navigator.onLine) { toast('📴 Đang offline — cần có mạng để Sync. Dữ liệu offline vẫn dùng bình thường.'); return; }
       if (syncing) return;
       syncing = true;
       document.querySelectorAll('.sync-icon').forEach(e => e.classList.add('spin'));
       try {
-        const book = (bookName || DEFAULT_BOOK).trim();
+        const sep = url.includes('?') ? '&' : '?';
+        const res = await fetch(url + sep + '_=' + Date.now());
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' — kiểm tra lại link Web App');
+        const text = await res.text();
+        if (/^\s*<(!doctype|html)/i.test(text)) {
+          const errMatch = text.match(/(?:ReferenceError|TypeError|SyntaxError|Error|Exception):[^<]+/i);
+          if (errMatch) throw new Error('Lỗi Apps Script: ' + errMatch[0].replace(/&quot;/g, '"').trim());
+          if (/accounts\.google\.com/i.test(text)) throw new Error('Web App chưa đặt quyền truy cập "Bất kỳ ai" (Anyone)');
+          throw new Error('Link trả về trang HTML thay vì JSON — kiểm tra lại Google Apps Script');
+        }
+
+        const fallbackBook = (bookName || DEFAULT_BOOK).trim();
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        const trimmed = text.trim();
+        const isJson = ct.includes('json') || trimmed.startsWith('{') || trimmed.startsWith('[');
+
+        let book = fallbackBook;
+        let lessons = [];
+        let records = [];
+
+        if (isJson) {
+          const parsed = JSON.parse(trimmed.replace(/^\uFEFF/, ''));
+          const payload = gasPayloadToRecords(parsed, fallbackBook);
+          book = payload.book;
+          lessons = payload.lessons;
+          records = payload.records;
+        } else {
+          records = csvToRecords(text).map(r => ({ ...r, deck: r.deck || fallbackBook }));
+          records.forEach(r => { if (r.lesson && !lessons.includes(r.lesson)) lessons.push(r.lesson); });
+        }
+
         // Dữ liệu cũ đã sync vào mục "Google Sheets" -> đổi tên thành sách, giữ nguyên tiến độ
         const legacyDeck = appData.decks.find(d => d.name === 'Google Sheets');
         if (legacyDeck && !appData.decks.some(d => d.name.trim().toLowerCase() === book.toLowerCase())) legacyDeck.name = book;
 
-        const total = { added: 0, updated: 0, skipped: 0, decksAdded: 0 };
-        const failed = [];
-        for (const src of sources) {
-          try {
-            const res = await fetch(src.url + (src.url.includes('?') ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' });
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            const text = await res.text();
-            if (/^\s*<(!doctype|html)/i.test(text)) throw new Error('không phải CSV');
-            // Nhãn "Sách / Bài" hoặc chỉ "Bài"; cột deck/lesson trong Sheet (nếu có) sẽ ưu tiên hơn
-            let srcBook = book, srcLesson = src.label;
-            const parts = src.label.split(/\s*(?:\/|>|::)\s*/).filter(Boolean);
-            if (parts.length > 1) { srcBook = parts[0]; srcLesson = parts.slice(1).join(' / '); }
-            const recs = csvToRecords(text).map(r => ({
-              ...r,
-              deck: r.deck || srcBook,
-              lesson: r.lesson || srcLesson || undefined
-            }));
-            const s = mergeRecords(recs, srcBook);
-            Object.keys(total).forEach(k => total[k] += s[k]);
-          } catch (err) {
-            console.error(err);
-            failed.push((src.label || src.url.slice(-30)) + ': ' + err.message);
-          }
+        const stat = mergeRecords(records, book);
+
+        const wasFirstSync = isFirstAuto === true || (await metaGet('needFirstSync')) === '1';
+
+        // Đảm bảo mục sách tồn tại và lưu toàn bộ danh sách tab bài học (kể cả tab mới chưa có từ)
+        let targetDeck = appData.decks.find(d => d.name.trim().toLowerCase() === book.toLowerCase());
+        if (!targetDeck && (lessons.length || records.length)) {
+          targetDeck = {
+            id: 'deck_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            name: book,
+            color: DECK_COLORS[appData.decks.length % DECK_COLORS.length],
+            lang: 'ja-JP'
+          };
+          appData.decks.push(targetDeck);
+          stat.decksAdded++;
         }
+        if (targetDeck && lessons.length) {
+          targetDeck.lessons = lessons;
+        }
+
+        // Mở thẳng mục sách sau lần Sync đầu tiên
+        if (wasFirstSync && targetDeck) {
+          currentDeckId = targetDeck.id;
+          currentLesson = '';
+          currentIndex = 0;
+          isFlipped = false;
+        }
+
         await saveData();
         await metaSet('lastSync', new Date().toLocaleString('vi-VN'));
+        await metaSet('needFirstSync', '0');
         renderAll();
         refreshDataStats();
-        if (failed.length) toast(`⚠ ${failed.length}/${sources.length} bài lỗi (${failed[0]}). ${statText(total)}`);
-        else toast(`✅ Sync ${sources.length} bài: ${statText(total)}`);
-        if (!failed.length) await metaSet('needFirstSync', '0');
+        const lessonInfo = lessons.length ? ` (${lessons.length} bài)` : '';
+        toast(`✅ Sync xong${lessonInfo}: ${statText(stat)}`);
       } catch (err) {
         console.error(err);
         toast('⚠ Sync lỗi: ' + (err.message || err));
@@ -2244,7 +2407,7 @@
     }
     function closeDataModal() { $('dataModal').classList.add('view-hidden'); }
 
-    $('syncBtn').onclick = syncSheet;
+    $('syncBtn').onclick = () => syncSheet(false);
     $('lessonSelect').onchange = (e) => setLesson(e.target.value);
     $('lessonPrev').onclick = () => stepLesson(-1);
     $('lessonNext').onclick = () => stepLesson(1);
@@ -2257,7 +2420,7 @@
       bookName = $('bookNameInput').value.trim() || DEFAULT_BOOK;
       await metaSet('sheetUrl', sheetUrl);
       await metaSet('bookName', bookName);
-      syncSheet();
+      syncSheet(false);
     };
     $('saveSheetBtn').onclick = async () => {
       sheetUrl = $('sheetUrlInput').value.trim();
@@ -2439,14 +2602,17 @@
 
       lastId = appData.cards.reduce((m, c) => (typeof c.id === 'number' && c.id > m ? c.id : m), 0);
       sheetUrl = (await metaGet('sheetUrl')) || DEFAULT_SHEET_URL;
-      if (sheetUrl.trim() === OLD_DEFAULT_URL) sheetUrl = DEFAULT_SHEET_URL;
+      if (OLD_DEFAULT_URLS.includes(sheetUrl.trim())) {
+        sheetUrl = DEFAULT_SHEET_URL;
+        await metaSet('sheetUrl', sheetUrl);
+      }
       bookName = (await metaGet('bookName')) || DEFAULT_BOOK;
       currentDeckId = appData.decks[0]?.id || '';
       currentIndex = 0;
       renderAll();
 
       // Tự động Sync 1 lần khi mở lần đầu (nếu offline thì thử lại ở lần mở sau, đến khi thành công)
-      if ((await metaGet('needFirstSync')) === '1' && navigator.onLine) await syncSheet();
+      if ((await metaGet('needFirstSync')) === '1' && navigator.onLine) await syncSheet(true);
 
       if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     }
