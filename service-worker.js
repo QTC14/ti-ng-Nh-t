@@ -1,5 +1,5 @@
 /* Vocab PWA service worker — offline-first */
-const VERSION = 'v6';
+const VERSION = 'v7';
 const APP_CACHE = `vocab-app-${VERSION}`;
 const RUNTIME_CACHE = `vocab-runtime-${VERSION}`;
 
@@ -12,6 +12,11 @@ const APP_SHELL = [
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png'
 ];
+
+// Nhận lệnh SKIP_WAITING từ index.html để kích hoạt SW mới ngay lập tức
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

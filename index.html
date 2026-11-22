@@ -552,6 +552,29 @@
       font-weight: 700;
       margin-bottom: 12px;
     }
+    /* ===== Page-flip 3D animations (card navigation) ===== */
+    @keyframes flipOutLeft {
+      from { transform: perspective(900px) rotateY(0deg);    transform-origin: left center; opacity: 1;   }
+      to   { transform: perspective(900px) rotateY(-85deg);  transform-origin: left center; opacity: 0.2; }
+    }
+    @keyframes flipInLeft {
+      from { transform: perspective(900px) rotateY(85deg);   transform-origin: left center; opacity: 0.2; }
+      to   { transform: perspective(900px) rotateY(0deg);    transform-origin: left center; opacity: 1;   }
+    }
+    @keyframes flipOutRight {
+      from { transform: perspective(900px) rotateY(0deg);    transform-origin: left center; opacity: 1;   }
+      to   { transform: perspective(900px) rotateY(85deg);   transform-origin: left center; opacity: 0.2; }
+    }
+    @keyframes flipInRight {
+      from { transform: perspective(900px) rotateY(-85deg);  transform-origin: left center; opacity: 0.2; }
+      to   { transform: perspective(900px) rotateY(0deg);    transform-origin: left center; opacity: 1;   }
+    }
+    .panel-flip-out-left  { animation: flipOutLeft  0.17s cubic-bezier(.55,.05,.65,.95) forwards; }
+    .panel-flip-in-left   { animation: flipInLeft   0.19s cubic-bezier(.35,.05,.5,1)    forwards; }
+    .panel-flip-out-right { animation: flipOutRight 0.17s cubic-bezier(.55,.05,.65,.95) forwards; }
+    .panel-flip-in-right  { animation: flipInRight  0.19s cubic-bezier(.35,.05,.5,1)    forwards; }
+    /* ===================================================== */
+
     .step-circles {
       display: flex;
       align-items: center;
@@ -3087,12 +3110,37 @@
         [{ transform: 'perspective(700px) rotateX(-80deg)', opacity: 0.2 }, { transform: 'perspective(700px) rotateX(0)', opacity: 1 }],
         { duration: 280, easing: 'cubic-bezier(.2,.8,.2,1)' });
     }
-    function goCard(step) {
+    let cardFlipping = false;
+    function goCard(step, skipAnim) {
       const n = getDeckCards().length;
       if (!n) return;
-      currentIndex = (currentIndex + step + n) % n;
-      isFlipped = false;
-      renderCard();
+      const panel = $('flashcardPanel');
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (skipAnim || !panel || reduced || cardFlipping) {
+        currentIndex = (currentIndex + step + n) % n;
+        isFlipped = false;
+        renderCard();
+        return;
+      }
+      cardFlipping = true;
+      const outCls = step > 0 ? 'panel-flip-out-left' : 'panel-flip-out-right';
+      const inCls  = step > 0 ? 'panel-flip-in-left'  : 'panel-flip-in-right';
+      // Reset any inline style left by swipe gesture
+      panel.style.transform = '';
+      panel.style.opacity = '';
+      panel.style.transition = '';
+      panel.classList.add(outCls);
+      setTimeout(() => {
+        panel.classList.remove(outCls);
+        currentIndex = (currentIndex + step + n) % n;
+        isFlipped = false;
+        renderCard();
+        panel.classList.add(inCls);
+        setTimeout(() => {
+          panel.classList.remove(inCls);
+          cardFlipping = false;
+        }, 220);
+      }, 180);
     }
     (function setupGestures() {
       const panel = $('flashcardPanel');
@@ -3108,8 +3156,11 @@
         if (!axis && (Math.abs(mx) > 10 || Math.abs(my) > 10)) axis = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
         if (axis === 'x') {
           dx = mx;
-          panel.style.transform = `translateX(${dx}px) rotate(${dx / 35}deg)`;
-          panel.style.opacity = String(1 - Math.min(Math.abs(dx) / 450, 0.45));
+          // Live tilt: rotateY dùng transform-origin left center giống page flip
+          const angle = Math.max(-40, Math.min(40, dx / 6));
+          panel.style.transformOrigin = 'left center';
+          panel.style.transform = `perspective(900px) rotateY(${angle}deg)`;
+          panel.style.opacity = String(1 - Math.min(Math.abs(dx) / 400, 0.5));
         }
       }, { passive: true });
       const end = () => {
@@ -3117,31 +3168,21 @@
         tracking = false;
         if (axis !== 'x') return;
         suppressClick = true;
-        setTimeout(() => suppressClick = false, 350);
-        const dir = dx < 0 ? -1 : 1;
+        setTimeout(() => suppressClick = false, 400);
+        // Reset inline style trước khi goCard tự lo animation
+        panel.style.transform = '';
+        panel.style.opacity = '';
+        panel.style.transition = '';
+        panel.style.transformOrigin = '';
         if (Math.abs(dx) > 70) {
-          panel.style.transition = 'transform .16s ease-in, opacity .16s ease-in';
-          panel.style.transform = `translateX(${dir * window.innerWidth * 0.8}px) rotate(${dir * 12}deg)`;
-          panel.style.opacity = '0';
           if (navigator.vibrate) navigator.vibrate(8);
-          setTimeout(() => {
-            goCard(dir < 0 ? 1 : -1);
-            panel.style.transition = 'none';
-            panel.style.transform = `translateX(${-dir * 50}px)`;
-            requestAnimationFrame(() => requestAnimationFrame(() => {
-              panel.style.transition = 'transform .22s cubic-bezier(.2,.8,.2,1), opacity .22s';
-              panel.style.transform = ''; panel.style.opacity = '';
-            }));
-          }, 160);
-        } else {
-          panel.style.transition = 'transform .2s ease-out, opacity .2s';
-          panel.style.transform = ''; panel.style.opacity = '';
+          goCard(dx < 0 ? 1 : -1);
         }
       };
       panel.addEventListener('touchend', end);
       panel.addEventListener('touchcancel', end);
 
-      // Chạm vào thẻ để lật
+      // Chạm vào thẻ để lật (front/back)
       panel.addEventListener('click', (e) => {
         if (suppressClick) return;
         if (e.target.closest('button, input, select, textarea, .step-circles, #frontPlaceholder')) return;
@@ -3182,7 +3223,23 @@
 
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('service-worker.js').catch(err => console.warn('SW lỗi:', err));
+        navigator.serviceWorker.register('service-worker.js').then(reg => {
+        // Tự động reload khi SW mới đã sẵn sàng
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) { refreshing = true; window.location.reload(); }
+        });
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // Có bản mới: gửi skipWaiting để kích hoạt ngay
+              newWorker.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        });
+      }).catch(err => console.warn('SW lỗi:', err));
       });
     }
 
