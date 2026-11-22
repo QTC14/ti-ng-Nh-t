@@ -1,5 +1,5 @@
 /* Vocab PWA service worker — offline-first */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const APP_CACHE = `vocab-app-${VERSION}`;
 const RUNTIME_CACHE = `vocab-runtime-${VERSION}`;
 
@@ -52,8 +52,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // Google Sheets (Sync) luôn đi thẳng ra mạng, không cache để lấy dữ liệu mới nhất
-  if (url.hostname === 'docs.google.com' || url.hostname.endsWith('googleusercontent.com')) return;
+  // Google Sheets & Apps Script (Sync) luôn đi thẳng ra mạng, không cache để lấy dữ liệu mới nhất
+  if (url.hostname === 'docs.google.com' || url.hostname === 'script.google.com' || url.hostname.endsWith('googleusercontent.com')) return;
 
   // Font Google: cache lại sau lần tải đầu để dùng offline
   if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
