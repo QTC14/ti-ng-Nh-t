@@ -698,6 +698,9 @@
       .panel { padding: 16px; }
     }
 
+    .lesson-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .lesson-bar .form-select { flex: 1; min-width: 0; font-weight: 700; }
+
     /* ===== TOAST / OVERLAY / DATA MODAL ===== */
     .toast {
       position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom));
@@ -904,7 +907,11 @@
           Dòng đầu là tiêu đề cột: <code>deck</code> <code>word</code> <code>reading</code> <code>meaning</code> <code>enWord</code> <code>enIpa</code> <code>note</code> <code>example</code> <code>exampleTrans</code> <code>enExample</code> <code>tag</code>.
           Từ mới sẽ được thêm, từ đã có (cùng mục + cùng từ) sẽ được cập nhật; tiến độ học được giữ nguyên, không xóa thẻ nào.
         </p>
-        <input class="form-input" id="sheetUrlInput" type="url" inputmode="url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" />
+                <label class="form-label">Tên sách (mục lớn)</label>
+        <input class="form-input" id="bookNameInput" placeholder="VD: Từ vựng Tiếng Nhật - Anh" style="margin-bottom:10px;" />
+        <label class="form-label">Các trang tính = các bài (mỗi dòng: <code>Tên bài | link</code>)</label>
+        <textarea class="form-textarea" id="sheetUrlInput" rows="5" wrap="off" style="font-size:12px;" placeholder="Bài 1 | https://docs.google.com/spreadsheets/d/e/.../pub?gid=0&single=true&output=csv&#10;Bài 2 | 1234567890"></textarea>
+        <p style="margin-top:6px;">Mỗi tab trong Sheet (Bài 1, Bài 2…) là 1 bài trong sách. Thêm tab mới thì thêm 1 dòng: <code>Bài 2 | gid</code> (gid là số sau <code>#gid=</code> trên thanh địa chỉ khi bấm vào tab đó; dùng chung link gốc ở dòng đầu). Nên Publish <b>Toàn bộ tài liệu</b> để mọi tab đều lấy được.</p>
         <div class="row-btns">
           <button class="btn" id="saveSheetBtn">💾 Lưu link</button>
           <button class="btn btn-primary" id="syncNowBtn"><span class="sync-icon">⟳</span> Sync ngay</button>
@@ -941,6 +948,11 @@
   <main class="main">
     <!-- VIEW 1: STUDY -->
     <section id="studyView">
+      <div class="lesson-bar view-hidden" id="lessonBar">
+        <button class="icon-btn icon-btn-sm" id="lessonPrev" title="Bài trước">‹</button>
+        <select class="form-select" id="lessonSelect" aria-label="Chọn bài"></select>
+        <button class="icon-btn icon-btn-sm" id="lessonNext" title="Bài sau">›</button>
+      </div>
       <div class="panel" id="flashcardPanel">
         <div class="breadcrumb">
           <span id="deckBreadcrumb">01. Từ vựng / Thẻ 1 / 5</span>
@@ -1055,6 +1067,11 @@
           <div class="form-group">
             <label class="form-label">Chọn bộ thẻ (Mục)</label>
             <select class="form-select" id="inDeck"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Bài (trong sách, không bắt buộc)</label>
+            <input class="form-input" id="inLesson" list="lessonList" placeholder="VD: Bài 12" />
+            <datalist id="lessonList"></datalist>
           </div>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
             <div class="form-group">
@@ -1281,7 +1298,43 @@
       return saveChain;
     }
     function saveVoiceCfg() { localStorage.setItem('soft_vocab_voice', JSON.stringify(voiceCfg)); }
-    function getDeckCards() { return appData.cards.filter(c => c.deckId === currentDeckId); }
+    // Mục = tên sách; mỗi thẻ có thể thuộc 1 "bài" (lesson) bên trong sách
+    let currentLesson = '';
+    function getBookCards() { return appData.cards.filter(c => c.deckId === currentDeckId); }
+    function getDeckCards() {
+      const all = getBookCards();
+      if (!currentLesson) return all;
+      const f = all.filter(c => (c.lesson || '') === currentLesson);
+      if (!f.length) { currentLesson = ''; return all; }
+      return f;
+    }
+    let lessonNames = [];
+    function renderLessonBar() {
+      getDeckCards(); // tự reset bài nếu không còn thuộc sách này
+      const all = getBookCards();
+      const count = new Map();
+      all.forEach(c => { const l = c.lesson || ''; count.set(l, (count.get(l) || 0) + 1); });
+      lessonNames = [...count.keys()].filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      document.getElementById('lessonBar').classList.toggle('view-hidden', lessonNames.length === 0);
+      const sel = document.getElementById('lessonSelect');
+      sel.innerHTML = `<option value="">Tất cả bài (${all.length})</option>` +
+        lessonNames.map(n => `<option value="${esc(n)}">${esc(n)} (${count.get(n)})</option>`).join('');
+      sel.value = currentLesson;
+      document.getElementById('lessonList').innerHTML = lessonNames.map(n => `<option value="${esc(n)}"></option>`).join('');
+    }
+    function setLesson(name) {
+      currentLesson = name;
+      currentIndex = 0;
+      isFlipped = false;
+      renderLessonBar();
+      renderCard();
+    }
+    function stepLesson(dir) {
+      if (!lessonNames.length) return;
+      let i = currentLesson ? lessonNames.indexOf(currentLesson) : (dir > 0 ? -1 : lessonNames.length);
+      i = Math.min(lessonNames.length - 1, Math.max(0, i + dir));
+      setLesson(lessonNames[i]);
+    }
     function getCurrentDeck() { return appData.decks.find(d => d.id === currentDeckId) || appData.decks[0]; }
 
     // ===== HỆ THỐNG GIỌNG ĐỌC NHẬT & ANH =====
@@ -1522,7 +1575,7 @@
       if (currentIndex < 0) currentIndex = cards.length - 1;
       const card = cards[currentIndex];
 
-      document.getElementById('deckBreadcrumb').textContent = `${deck.name}  /  Thẻ ${currentIndex + 1} / ${cards.length}`;
+      document.getElementById('deckBreadcrumb').textContent = `${deck.name}${currentLesson ? '  ›  ' + currentLesson : ''}  /  Thẻ ${currentIndex + 1} / ${cards.length}`;
       document.getElementById('cardStateLabel').textContent = isFlipped ? 'ĐÁP ÁN' : 'MẶT TRƯỚC';
       document.getElementById('wordTitle').textContent = card.word;
 
@@ -1610,6 +1663,7 @@
       document.getElementById('addCardForm').reset();
       document.getElementById('editCardId').value = '';
       document.getElementById('inDeck').value = currentDeckId;
+      document.getElementById('inLesson').value = currentLesson;
       document.getElementById('cardFormHeading').textContent = 'Thêm từ vựng mới';
       document.getElementById('submitCardBtn').textContent = '＋ Lưu vào bộ thẻ';
       document.getElementById('cancelEditCardBtn').classList.add('view-hidden');
@@ -1621,6 +1675,7 @@
       switchView('manage');
       document.getElementById('editCardId').value = card.id;
       document.getElementById('inDeck').value = card.deckId;
+      document.getElementById('inLesson').value = card.lesson || '';
       document.getElementById('inWord').value = card.word;
       document.getElementById('inReading').value = card.reading || '';
       document.getElementById('inMeaning').value = card.meaning;
@@ -1646,7 +1701,7 @@
 
     function renderManageList() {
       const list = document.getElementById('manageCardList');
-      const cards = getDeckCards();
+      const cards = getBookCards();
       if (cards.length === 0) {
         list.innerHTML = '<p style="font-size:13px; color:var(--text-muted)">Chưa có thẻ nào trong mục này.</p>';
         return;
@@ -1654,7 +1709,7 @@
       list.innerHTML = cards.map(c => `
         <div class="card-list-item">
           <div style="flex:1;">
-            <strong>${esc(c.word)}</strong>
+            ${c.lesson ? `<span style="font-size:11px; background:var(--pastel-yellow); border:1px solid var(--border); padding:1px 6px; border-radius:6px; margin-right:4px;">${esc(c.lesson)}</span>` : ''}<strong>${esc(c.word)}</strong>
             <span style="font-size:12px; color:var(--text-muted)">(${esc(c.reading) || '-'})</span>
             ${c.enWord ? `<span style="font-size:11px; background:var(--pastel-blue); border:1px solid var(--border); padding:1px 6px; border-radius:6px; margin-left:4px;">${esc(c.enWord)}</span>` : ''}
             <div style="font-size:12px; margin-top:3px;">${esc(c.meaning)}</div>
@@ -1676,6 +1731,7 @@
 
     function renderAll() {
       renderSidebar();
+      renderLessonBar();
       renderCard();
       renderManageList();
     }
@@ -1758,6 +1814,7 @@
       const editId = document.getElementById('editCardId').value;
       const payload = {
         deckId: document.getElementById('inDeck').value,
+        lesson: document.getElementById('inLesson').value.trim(),
         word: document.getElementById('inWord').value.trim(),
         reading: document.getElementById('inReading').value.trim(),
         meaning: document.getElementById('inMeaning').value.trim(),
@@ -1792,7 +1849,7 @@
         const p = line.split('|').map(s => s.trim());
         if (p[0] && p[2]) {
           appData.cards.push({
-            id: nextId(), deckId: currentDeckId,
+            id: nextId(), deckId: currentDeckId, lesson: currentLesson,
             word: p[0], reading: p[1] || '', meaning: p[2],
             enWord: p[3] || '', enIpa: p[4] || '', note: p[5] || '',
             example: p[6] || '', exampleTrans: p[7] || '', enExample: p[8] || '',
@@ -1921,8 +1978,9 @@
       return rows;
     }
 
-    const FIELD_ORDER = ['deck', 'word', 'reading', 'meaning', 'enWord', 'enIpa', 'note', 'example', 'exampleTrans', 'enExample', 'tag'];
+    const FIELD_ORDER = ['deck', 'word', 'reading', 'meaning', 'enWord', 'enIpa', 'note', 'example', 'exampleTrans', 'enExample', 'tag', 'lesson'];
     const HEADER_ALIASES = {
+      lesson: ['lesson', 'bai', 'baihoc', 'unit', 'chapter'],
       deck: ['deck', 'muc', 'bo', 'bothe', 'folder', 'category'],
       word: ['word', 'tu', 'tuvung', 'tunhat', 'japanese', 'jp', 'kanji', 'term', 'front'],
       reading: ['reading', 'cachdoc', 'kana', 'furigana'],
@@ -1975,11 +2033,17 @@
     function mergeRecords(recs, defaultDeckName) {
       const stat = { added: 0, updated: 0, skipped: 0, decksAdded: 0 };
       const index = new Map();
-      appData.cards.forEach(c => index.set(c.deckId + '|' + c.word, c));
+      appData.cards.forEach(c => index.set(c.deckId + '|' + (c.lesson || '') + '|' + c.word, c));
       recs.forEach(r => {
         const word = String(r.word ?? '').trim(), meaning = String(r.meaning ?? '').trim();
         if (!word || !meaning) { stat.skipped++; return; }
-        const deckName = String(r.deck || defaultDeckName || 'Nhập từ file').trim();
+        let deckName = String(r.deck || defaultDeckName || 'Nhập từ file').trim();
+        let lesson = String(r.lesson ?? '').trim();
+        if (!lesson) {
+          // Cho phép viết "Tên sách / Bài 5" (hoặc "> ", ":: ") trong cột deck
+          const parts = deckName.split(/\s*(?:\/|>|::)\s*/).filter(Boolean);
+          if (parts.length > 1) { deckName = parts[0]; lesson = parts.slice(1).join(' / '); }
+        }
         let deck = appData.decks.find(d => d.name.trim().toLowerCase() === deckName.toLowerCase());
         if (!deck) {
           deck = {
@@ -1991,8 +2055,14 @@
           appData.decks.push(deck);
           stat.decksAdded++;
         }
-        const key = deck.id + '|' + word;
-        const ex = index.get(key);
+        const key = deck.id + '|' + lesson + '|' + word;
+        let ex = index.get(key);
+        if (!ex && lesson) {
+          // Thẻ cũ cùng từ nhưng chưa có bài -> gán vào bài, giữ tiến độ
+          const oldKey = deck.id + '||' + word;
+          const old = index.get(oldKey);
+          if (old) { old.lesson = lesson; index.delete(oldKey); index.set(key, old); ex = old; stat.updated++; }
+        }
         if (ex) {
           let changed = false;
           MERGE_FIELDS.forEach(f => {
@@ -2004,7 +2074,7 @@
           if (changed) stat.updated++;
         } else {
           const card = {
-            id: nextId(), deckId: deck.id, word,
+            id: nextId(), deckId: deck.id, lesson, word,
             reading: String(r.reading ?? '').trim(), meaning,
             enWord: String(r.enWord ?? '').trim(), enIpa: String(r.enIpa ?? '').trim(),
             enExample: String(r.enExample ?? '').trim(),
@@ -2065,8 +2135,33 @@
 
     // ---------- GOOGLE SHEETS SYNC ----------
     // Link Google Sheets CSV mặc định (có thể đổi trong mục 🗄 Dữ liệu)
-    const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnct0ssuMfWTSYhg0PCMJ9GO9IzL3BT3gpwMqF4nA_EJ_6yAhcXuILwYH3lfs713xlUMe6dYlDYQZ0/pub?gid=0&single=true&output=csv';
+    // Nguồn Sync mặc định. Mỗi dòng = 1 trang tính (tab) = 1 bài:  Tên bài | link CSV (hoặc chỉ gid)
+    const DEFAULT_BOOK = 'Từ vựng Tiếng Nhật - Anh';
+    const DEFAULT_SHEET_URL = 'Bài 1 | https://docs.google.com/spreadsheets/d/e/2PACX-1vTnct0ssuMfWTSYhg0PCMJ9GO9IzL3BT3gpwMqF4nA_EJ_6yAhcXuILwYH3lfs713xlUMe6dYlDYQZ0/pub?gid=0&single=true&output=csv';
+    const OLD_DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnct0ssuMfWTSYhg0PCMJ9GO9IzL3BT3gpwMqF4nA_EJ_6yAhcXuILwYH3lfs713xlUMe6dYlDYQZ0/pub?gid=0&single=true&output=csv';
+    let bookName = DEFAULT_BOOK;
     let sheetUrl = '';
+
+    // Tách textarea thành danh sách nguồn: [{lesson, book?, url}]
+    function parseSources(text) {
+      const out = [];
+      let base = '';
+      String(text || '').split(/\r?\n/).forEach(raw => {
+        const line = raw.trim();
+        if (!line) return;
+        let label = '', target = line;
+        const bar = line.lastIndexOf('|');
+        if (bar >= 0) { label = line.slice(0, bar).trim(); target = line.slice(bar + 1).trim(); }
+        let url;
+        if (/^(gid=)?\d+$/i.test(target)) {
+          if (!base) return;
+          const gid = target.replace(/\D/g, '');
+          url = /gid=\d+/.test(base) ? base.replace(/gid=\d+/, 'gid=' + gid) : base + (base.includes('?') ? '&' : '?') + 'gid=' + gid;
+        } else url = target;
+        if (/^https?:\/\//i.test(url)) { if (!base) base = url; out.push({ label, url: normalizeSheetUrl(url) }); }
+      });
+      return out;
+    }
     function normalizeSheetUrl(u) {
       u = (u || '').trim();
       if (!u) return '';
@@ -2084,25 +2179,49 @@
 
     let syncing = false;
     async function syncSheet() {
-      const url = normalizeSheetUrl(sheetUrl);
-      if (!url) { openDataModal(); toast('Dán link Google Sheets (publish CSV) rồi bấm Sync'); return; }
+      const sources = parseSources(sheetUrl);
+      if (!sources.length) { openDataModal(); toast('Dán link Google Sheets (publish CSV) rồi bấm Sync'); return; }
       if (!navigator.onLine) { toast('📴 Đang offline — cần có mạng để Sync. Dữ liệu offline vẫn dùng bình thường.'); return; }
       if (syncing) return;
       syncing = true;
       document.querySelectorAll('.sync-icon').forEach(e => e.classList.add('spin'));
       try {
-        const res = await fetch(url + (url.includes('?') ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' });
-        if (!res.ok) throw new Error('HTTP ' + res.status + ' — kiểm tra lại link publish');
-        const text = await res.text();
-        if (/^\s*<(!doctype|html)/i.test(text)) throw new Error('Link trả về trang web, hãy chọn Publish dạng CSV');
-        const stat = mergeRecords(csvToRecords(text), 'Google Sheets');
+        const book = (bookName || DEFAULT_BOOK).trim();
+        // Dữ liệu cũ đã sync vào mục "Google Sheets" -> đổi tên thành sách, giữ nguyên tiến độ
+        const legacyDeck = appData.decks.find(d => d.name === 'Google Sheets');
+        if (legacyDeck && !appData.decks.some(d => d.name.trim().toLowerCase() === book.toLowerCase())) legacyDeck.name = book;
+
+        const total = { added: 0, updated: 0, skipped: 0, decksAdded: 0 };
+        const failed = [];
+        for (const src of sources) {
+          try {
+            const res = await fetch(src.url + (src.url.includes('?') ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const text = await res.text();
+            if (/^\s*<(!doctype|html)/i.test(text)) throw new Error('không phải CSV');
+            // Nhãn "Sách / Bài" hoặc chỉ "Bài"; cột deck/lesson trong Sheet (nếu có) sẽ ưu tiên hơn
+            let srcBook = book, srcLesson = src.label;
+            const parts = src.label.split(/\s*(?:\/|>|::)\s*/).filter(Boolean);
+            if (parts.length > 1) { srcBook = parts[0]; srcLesson = parts.slice(1).join(' / '); }
+            const recs = csvToRecords(text).map(r => ({
+              ...r,
+              deck: r.deck || srcBook,
+              lesson: r.lesson || srcLesson || undefined
+            }));
+            const s = mergeRecords(recs, srcBook);
+            Object.keys(total).forEach(k => total[k] += s[k]);
+          } catch (err) {
+            console.error(err);
+            failed.push((src.label || src.url.slice(-30)) + ': ' + err.message);
+          }
+        }
         await saveData();
-        const when = new Date().toLocaleString('vi-VN');
-        await metaSet('lastSync', when);
+        await metaSet('lastSync', new Date().toLocaleString('vi-VN'));
         renderAll();
         refreshDataStats();
-        toast(`✅ Sync xong: ${statText(stat)}`);
-        await metaSet('needFirstSync', '0');
+        if (failed.length) toast(`⚠ ${failed.length}/${sources.length} bài lỗi (${failed[0]}). ${statText(total)}`);
+        else toast(`✅ Sync ${sources.length} bài: ${statText(total)}`);
+        if (!failed.length) await metaSet('needFirstSync', '0');
       } catch (err) {
         console.error(err);
         toast('⚠ Sync lỗi: ' + (err.message || err));
@@ -2119,25 +2238,33 @@
     }
     async function openDataModal() {
       $('sheetUrlInput').value = sheetUrl;
+      $('bookNameInput').value = bookName;
       await refreshDataStats();
       $('dataModal').classList.remove('view-hidden');
     }
     function closeDataModal() { $('dataModal').classList.add('view-hidden'); }
 
     $('syncBtn').onclick = syncSheet;
+    $('lessonSelect').onchange = (e) => setLesson(e.target.value);
+    $('lessonPrev').onclick = () => stepLesson(-1);
+    $('lessonNext').onclick = () => stepLesson(1);
     $('openDataBtn').onclick = () => { closeDrawer(); openDataModal(); };
     $('openDataFromManage').onclick = openDataModal;
     $('closeDataModalBtn').onclick = closeDataModal;
     $('dataModal').addEventListener('click', (e) => { if (e.target === $('dataModal')) closeDataModal(); });
     $('syncNowBtn').onclick = async () => {
       sheetUrl = $('sheetUrlInput').value.trim();
+      bookName = $('bookNameInput').value.trim() || DEFAULT_BOOK;
       await metaSet('sheetUrl', sheetUrl);
+      await metaSet('bookName', bookName);
       syncSheet();
     };
     $('saveSheetBtn').onclick = async () => {
       sheetUrl = $('sheetUrlInput').value.trim();
+      bookName = $('bookNameInput').value.trim() || DEFAULT_BOOK;
       await metaSet('sheetUrl', sheetUrl);
-      toast('💾 Đã lưu link Google Sheets');
+      await metaSet('bookName', bookName);
+      toast('💾 Đã lưu cấu hình Google Sheets');
     };
 
     // ---------- NHẬP FILE (chọn file + kéo thả) ----------
@@ -2312,6 +2439,8 @@
 
       lastId = appData.cards.reduce((m, c) => (typeof c.id === 'number' && c.id > m ? c.id : m), 0);
       sheetUrl = (await metaGet('sheetUrl')) || DEFAULT_SHEET_URL;
+      if (sheetUrl.trim() === OLD_DEFAULT_URL) sheetUrl = DEFAULT_SHEET_URL;
+      bookName = (await metaGet('bookName')) || DEFAULT_BOOK;
       currentDeckId = appData.decks[0]?.id || '';
       currentIndex = 0;
       renderAll();
