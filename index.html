@@ -552,28 +552,38 @@
       font-weight: 700;
       margin-bottom: 12px;
     }
-    /* ===== Page-flip 3D animations (card navigation) ===== */
-    @keyframes flipOutLeft {
-      from { transform: perspective(900px) rotateY(0deg);    transform-origin: left center; opacity: 1;   }
-      to   { transform: perspective(900px) rotateY(-85deg);  transform-origin: left center; opacity: 0.2; }
+    /* ===== Realistic Page Curl / Apple Books style ===== */
+    .flashcard-stage {
+      position: relative;
+      width: 100%;
+      margin-bottom: 14px;
     }
-    @keyframes flipInLeft {
-      from { transform: perspective(900px) rotateY(85deg);   transform-origin: left center; opacity: 0.2; }
-      to   { transform: perspective(900px) rotateY(0deg);    transform-origin: left center; opacity: 1;   }
+    .flashcard-stage .panel {
+      margin-bottom: 0;
     }
-    @keyframes flipOutRight {
-      from { transform: perspective(900px) rotateY(0deg);    transform-origin: left center; opacity: 1;   }
-      to   { transform: perspective(900px) rotateY(85deg);   transform-origin: left center; opacity: 0.2; }
+    .flashcard-underlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      pointer-events: none;
+      overflow: hidden;
+      border-radius: 18px;
+      z-index: 1;
     }
-    @keyframes flipInRight {
-      from { transform: perspective(900px) rotateY(-85deg);  transform-origin: left center; opacity: 0.2; }
-      to   { transform: perspective(900px) rotateY(0deg);    transform-origin: left center; opacity: 1;   }
+    .page-curl-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      border-radius: 18px;
+      z-index: 5;
     }
-    .panel-flip-out-left  { animation: flipOutLeft  0.17s cubic-bezier(.55,.05,.65,.95) forwards; }
-    .panel-flip-in-left   { animation: flipInLeft   0.19s cubic-bezier(.35,.05,.5,1)    forwards; }
-    .panel-flip-out-right { animation: flipOutRight 0.17s cubic-bezier(.55,.05,.65,.95) forwards; }
-    .panel-flip-in-right  { animation: flipInRight  0.19s cubic-bezier(.35,.05,.5,1)    forwards; }
-    /* ===================================================== */
+    /* =================================================== */
 
     .step-circles {
       display: flex;
@@ -1190,7 +1200,9 @@
         <button type="button" class="icon-btn icon-btn-sm" id="lessonNext" title="Bài sau">›</button>
         <button type="button" class="icon-btn icon-btn-sm shuffle-btn" id="shuffleBtn" title="Trộn ngẫu nhiên từ vựng" aria-pressed="false">🔀</button>
       </div>
-      <div class="panel" id="flashcardPanel">
+      <div class="flashcard-stage" id="flashcardStage">
+        <div class="panel flashcard-underlay" id="flashcardUnderlay" aria-hidden="true" style="display:none;"></div>
+        <div class="panel" id="flashcardPanel">
         <div class="breadcrumb">
           <span id="deckBreadcrumb">01. Từ vựng / Thẻ 1 / 5</span>
           <div style="display:flex; align-items:center; gap:6px;">
@@ -1277,6 +1289,8 @@
           </div>
         </div>
       </div>
+      <canvas id="pageCurlCanvas" class="page-curl-canvas" style="display:none;"></canvas>
+    </div>
 
       <div class="step-panel">
         <div class="step-header">
@@ -2245,9 +2259,14 @@
         card.level = rate === 'again' ? 'Cần ôn lại' : 'Hơi khó';
       }
       saveData();
-      currentIndex = (currentIndex + 1) % cards.length;
-      isFlipped = false;
-      renderAll();
+      if (cards.length <= 1) {
+        renderAll();
+      } else {
+        curlPage(1, 350, () => {
+          renderDecks();
+          renderStats();
+        });
+      }
     }
 
     function switchView(view) {
@@ -2283,7 +2302,7 @@
     document.getElementById('flipBtn').onclick = flipCard;
     document.getElementById('frontPlaceholder').onclick = flipCard;
     document.getElementById('resetCardBtn').onclick = () => { isFlipped = !isFlipped; renderCard(); };
-    document.getElementById('prevBtn').onclick = () => { currentIndex--; isFlipped = false; renderCard(); };
+    document.getElementById('prevBtn').onclick = () => { curlPage(-1); };
 
     // 4 nút loa tách riêng
     const speakCurrentWord = () => { const c = getDeckCards()[currentIndex]; if (c) speak(c.word); };
@@ -3110,81 +3129,465 @@
         [{ transform: 'perspective(700px) rotateX(-80deg)', opacity: 0.2 }, { transform: 'perspective(700px) rotateX(0)', opacity: 1 }],
         { duration: 280, easing: 'cubic-bezier(.2,.8,.2,1)' });
     }
-    let cardFlipping = false;
-    function goCard(step, skipAnim) {
-      const n = getDeckCards().length;
-      if (!n) return;
+    // =========================================================================
+    // REALISTIC PAGE CURL ENGINE (Apple Books / Paper Fold style)
+    // =========================================================================
+    let isCurling = false;
+    let suppressCardClick = false;
+
+    // Helper: Vẽ rounded rectangle trên 2D Canvas (clip / path)
+    function drawCurlRoundRect(ctx, x, y, w, h, r) {
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(x, y, w, h, r);
+      } else {
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+      }
+    }
+
+    // Nạp nội dung thẻ đích vào tấm thẻ đệm (#flashcardUnderlay)
+    function renderUnderlayCard(targetIdx) {
+      const underlay = $('flashcardUnderlay');
       const panel = $('flashcardPanel');
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (skipAnim || !panel || reduced || cardFlipping) {
-        currentIndex = (currentIndex + step + n) % n;
-        isFlipped = false;
-        renderCard();
+      if (!underlay || !panel) return;
+      const cards = getDeckCards();
+      const deck = getCurrentDeck();
+      if (!deck || !cards.length) return;
+      const n = cards.length;
+      const safeIdx = (targetIdx + n) % n;
+      const card = cards[safeIdx];
+      const isDeckEN = (deck.lang || '').startsWith('en');
+
+      // Sao chép nguyên vẹn cấu trúc HTML từ panel và đổi namespace ID để tránh trùng
+      underlay.innerHTML = panel.innerHTML.replace(/id="([^"]+)"/g, 'id="underlay_$1"');
+
+      // Điền nội dung mặt trước của thẻ đích
+      const q = (sel) => underlay.querySelector(sel);
+      const breadcrumb = q('#underlay_deckBreadcrumb');
+      if (breadcrumb) {
+        breadcrumb.textContent = `${deck.name}${currentLesson ? '  ›  ' + currentLesson : ''}  /  Thẻ ${safeIdx + 1} / ${n}`;
+      }
+      const stateLabel = q('#underlay_cardStateLabel');
+      if (stateLabel) stateLabel.textContent = 'MẶT TRƯỚC';
+      const wordTitle = q('#underlay_wordTitle');
+      if (wordTitle) wordTitle.textContent = card.word;
+
+      const lblReading = q('#underlay_lblReading');
+      if (lblReading) lblReading.textContent = isDeckEN ? 'PHIÊN ÂM (IPA)' : 'CÁCH ĐỌC';
+      const lblNote = q('#underlay_lblNote');
+      if (lblNote) lblNote.textContent = isDeckEN ? 'ĐỒNG NGHĨA / GHI CHÚ' : 'HÁN VIỆT / GHI CHÚ';
+      const valReading = q('#underlay_valReading');
+      if (valReading) valReading.textContent = '—';
+      const valHanViet = q('#underlay_valHanViet');
+      if (valHanViet) valHanViet.textContent = '—';
+      const valStatus = q('#underlay_valStatus');
+      if (valStatus) valStatus.textContent = card.mastered ? 'Đã thuộc' : 'Chưa nhớ';
+
+      const tags = (card.tag || 'Từ vựng').split('•').map(s => s.trim());
+      const pillRow = q('#underlay_pillRow');
+      if (pillRow) {
+        pillRow.innerHTML = `
+          <span class="pill pill-yellow">🏷 ${esc(tags[0]) || 'Từ vựng'}</span>
+          ${tags[1] ? `<span class="pill pill-accent">📊 ${esc(tags[1])}</span>` : ''}
+          <span class="pill pill-purple">⚡ ${esc(card.level) || 'Mới'}</span>
+        `;
+      }
+      const frontPh = q('#underlay_frontPlaceholder');
+      if (frontPh) {
+        frontPh.innerHTML = '<strong>[ Đang ẩn đáp án ]</strong><br />Bấm vào đây hoặc nhấn <b>Space</b> để mở nghĩa Việt, Tiếng Anh & ví dụ';
+        frontPh.classList.remove('view-hidden');
+      }
+      const backContent = q('#underlay_backContent');
+      if (backContent) backContent.classList.add('view-hidden');
+      const notebookBox = q('#underlay_notebookBox');
+      if (notebookBox) notebookBox.classList.remove('revealed');
+      const bentoCards = underlay.querySelectorAll('.bento-card');
+      bentoCards.forEach(bc => bc.classList.remove('revealed'));
+    }
+
+    // Chuẩn bị kích thước Canvas sắc nét theo DPR
+    function resizeCurlCanvas() {
+      const canvas = $('pageCurlCanvas');
+      const stage = $('flashcardStage');
+      if (!canvas || !stage) return null;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+      const rect = stage.getBoundingClientRect();
+      const w = Math.round(rect.width);
+      const h = Math.round(rect.height);
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { width: w, height: h, ctx };
+    }
+
+    // Vẽ 1 khung hình hiệu ứng uốn cong trang giấy (Page Curl)
+    function drawCurlFrame(progress, direction, touchY) {
+      const canvas = $('pageCurlCanvas');
+      const panel = $('flashcardPanel');
+      const underlay = $('flashcardUnderlay');
+      if (!canvas || !panel || !underlay) return;
+
+      const rect = panel.getBoundingClientRect();
+      const W = rect.width;
+      const H = rect.height;
+      if (W <= 0 || H <= 0) return;
+
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, W, H);
+
+      // Giới hạn progress trong [0, 1]
+      const p = Math.max(0, Math.min(1, progress));
+      if (p <= 0.001) {
+        panel.style.clipPath = '';
+        underlay.style.clipPath = '';
         return;
       }
-      cardFlipping = true;
-      const outCls = step > 0 ? 'panel-flip-out-left' : 'panel-flip-out-right';
-      const inCls  = step > 0 ? 'panel-flip-in-left'  : 'panel-flip-in-right';
-      // Reset any inline style left by swipe gesture
-      panel.style.transform = '';
-      panel.style.opacity = '';
-      panel.style.transition = '';
-      panel.classList.add(outCls);
-      setTimeout(() => {
-        panel.classList.remove(outCls);
+      if (p >= 0.999) {
+        panel.style.clipPath = direction > 0 ? 'polygon(0 0, 0 0, 0 100%, 0 100%)' : '';
+        underlay.style.clipPath = direction < 0 ? '' : 'polygon(0 0, 0 0, 0 100%, 0 100%)';
+        return;
+      }
+
+      // Tính vị trí nếp gấp và góc nghiêng tự nhiên theo vị trí chạm tay
+      const yPos = typeof touchY === 'number' ? touchY : H / 2;
+      const dyNorm = Math.max(-0.5, Math.min(0.5, (yPos - H / 2) / H));
+      const tilt = dyNorm * 38 * Math.sin(p * Math.PI);
+
+      let xf, xt, xb, topCard, btmCard;
+      if (direction > 0) {
+        // Vuốt sang trái (chuyển thẻ tiếp theo):
+        // Thẻ hiện tại (panel) nằm trên, uốn sang trái để lộ thẻ tiếp theo (underlay) bên dưới
+        topCard = panel;
+        btmCard = underlay;
+        xf = W * (1 - p);
+        xt = Math.max(-50, xf - tilt);
+        xb = Math.max(-50, xf + tilt);
+        topCard.style.clipPath = `polygon(0 0, ${xt}px 0, ${xb}px 100%, 0 100%)`;
+        btmCard.style.clipPath = '';
+      } else {
+        // Vuốt sang phải (về thẻ trước):
+        // Thẻ trước (underlay) nằm trên, uốn từ mép trái trải phẳng dần đè lên thẻ hiện tại (panel)
+        topCard = underlay;
+        btmCard = panel;
+        xf = W * p;
+        xt = Math.min(W + 50, xf - tilt);
+        xb = Math.min(W + 50, xf + tilt);
+        topCard.style.clipPath = `polygon(0 0, ${xt}px 0, ${xb}px 100%, 0 100%)`;
+        btmCard.style.clipPath = '';
+      }
+
+      // Bề rộng ống giấy cuộn mềm (curl width)
+      const maxCw = Math.min(85, W * 0.45);
+      const cw = Math.max(3, maxCw * Math.sin(p * Math.PI * 0.95 + 0.05));
+      const shadowW = Math.min(60, cw + 24);
+      const xBelly = xf - cw - 8 * Math.sin(p * Math.PI);
+
+      ctx.save();
+      // Khóa vùng vẽ trong đúng bo góc thẻ (18px)
+      ctx.beginPath();
+      drawCurlRoundRect(ctx, 0, 0, W, H, 18);
+      ctx.clip();
+
+      // 1. Bóng đổ gáy cong xuống tấm thẻ phẳng bên dưới (về phía bên phải nếp gấp)
+      ctx.beginPath();
+      ctx.moveTo(xt, 0);
+      ctx.lineTo(xt + shadowW, 0);
+      ctx.lineTo(xb + shadowW, H);
+      ctx.lineTo(xb, H);
+      ctx.closePath();
+      const shadowGrad = ctx.createLinearGradient(xf, 0, xf + shadowW, 0);
+      shadowGrad.addColorStop(0, 'rgba(25, 20, 15, 0.35)');
+      shadowGrad.addColorStop(0.2, 'rgba(25, 20, 15, 0.20)');
+      shadowGrad.addColorStop(0.6, 'rgba(25, 20, 15, 0.06)');
+      shadowGrad.addColorStop(1, 'rgba(25, 20, 15, 0)');
+      ctx.fillStyle = shadowGrad;
+      ctx.fill();
+
+      // 2. Bóng hắt dưới vòm tờ giấy uốn bên trái nếp gấp
+      ctx.beginPath();
+      ctx.moveTo(xt - cw, 0);
+      ctx.quadraticCurveTo(xBelly, H / 2, xb - cw, H);
+      ctx.lineTo(xb - cw - 16, H);
+      ctx.quadraticCurveTo(xBelly - 16, H / 2, xt - cw - 16, 0);
+      ctx.closePath();
+      const underGrad = ctx.createLinearGradient(xf - cw, 0, xf - cw - 16, 0);
+      underGrad.addColorStop(0, 'rgba(25, 20, 15, 0.22)');
+      underGrad.addColorStop(1, 'rgba(25, 20, 15, 0)');
+      ctx.fillStyle = underGrad;
+      ctx.fill();
+
+      // 3. Mặt sau của tờ giấy uốn cong (màu kem ấm, gradient ánh sáng hình trụ như trang sách thật)
+      ctx.beginPath();
+      ctx.moveTo(xt, 0);
+      ctx.lineTo(xt - cw, 0);
+      ctx.quadraticCurveTo(xBelly, H / 2, xb - cw, H);
+      ctx.lineTo(xb, H);
+      ctx.closePath();
+      const flapGrad = ctx.createLinearGradient(xf - cw, 0, xf, 0);
+      flapGrad.addColorStop(0, '#ECE4D6');      // Mép lật (đậm nhẹ)
+      flapGrad.addColorStop(0.16, '#F8F4EA');   // Thân mặt sau tờ giấy
+      flapGrad.addColorStop(0.48, '#FFFFFF');   // Vệt sáng phản chiếu trên đỉnh ống uốn
+      flapGrad.addColorStop(0.78, '#EFE7DA');   // Xuống chân nếp uốn
+      flapGrad.addColorStop(0.92, '#D7CAB8');   // Bóng tối nếp gấp
+      flapGrad.addColorStop(1.0, '#BCAE9C');    // Gáy nếp gập
+      ctx.fillStyle = flapGrad;
+      ctx.fill();
+
+      // Viền đen retro 1.8px dọc theo mép trang giấy uốn
+      ctx.beginPath();
+      ctx.moveTo(xt, 0);
+      ctx.lineTo(xt - cw, 0);
+      ctx.quadraticCurveTo(xBelly, H / 2, xb - cw, H);
+      ctx.lineTo(xb, H);
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+
+      // Vạch highlight phản quang mảnh dọc theo sống ống giấy
+      ctx.beginPath();
+      ctx.moveTo(xt - cw * 0.42, 0);
+      ctx.quadraticCurveTo(xBelly + cw * 0.58, H / 2, xb - cw * 0.42, H);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // Hàm thực hiện hiệu ứng uốn lật trang hoàn chỉnh (bấm nút hoặc hoàn tất vuốt)
+    function curlPage(step, duration = 350, onDone = null) {
+      const cards = getDeckCards();
+      const n = cards.length;
+      if (n <= 1) return;
+      if (isCurling) return;
+
+      const panel = $('flashcardPanel');
+      const underlay = $('flashcardUnderlay');
+      const canvas = $('pageCurlCanvas');
+      if (!panel || !underlay || !canvas || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         currentIndex = (currentIndex + step + n) % n;
         isFlipped = false;
         renderCard();
-        panel.classList.add(inCls);
-        setTimeout(() => {
-          panel.classList.remove(inCls);
-          cardFlipping = false;
-        }, 220);
-      }, 180);
+        if (onDone) onDone();
+        return;
+      }
+
+      isCurling = true;
+      const direction = step > 0 ? 1 : -1;
+      const targetIdx = (currentIndex + direction + n) % n;
+
+      // Chuẩn bị tấm thẻ đích và hiển thị
+      renderUnderlayCard(targetIdx);
+      resizeCurlCanvas();
+      underlay.style.display = 'block';
+      canvas.style.display = 'block';
+
+      if (direction > 0) {
+        panel.style.zIndex = '2';
+        underlay.style.zIndex = '1';
+      } else {
+        underlay.style.zIndex = '2';
+        panel.style.zIndex = '1';
+      }
+
+      const startTime = performance.now();
+      const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+
+      function stepAnim(now) {
+        const elapsed = now - startTime;
+        const t = Math.min(1, elapsed / duration);
+        const p = easeOut(t);
+
+        drawCurlFrame(p, direction, panel.clientHeight / 2);
+
+        if (t < 1) {
+          requestAnimationFrame(stepAnim);
+        } else {
+          // Hoàn thành: cập nhật dữ liệu thẻ mới và dọn dẹp
+          currentIndex = targetIdx;
+          isFlipped = false;
+          renderCard();
+
+          panel.style.clipPath = '';
+          underlay.style.clipPath = '';
+          underlay.style.display = 'none';
+          canvas.style.display = 'none';
+          panel.style.zIndex = '';
+          underlay.style.zIndex = '';
+
+          const ctx = canvas.getContext('2d');
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          isCurling = false;
+          if (onDone) onDone();
+        }
+      }
+
+      requestAnimationFrame(stepAnim);
     }
+
+    function goCard(step) {
+      curlPage(step);
+    }
+
+    // Thiết lập cử chỉ vuốt ngón tay uốn cong trang giấy mềm theo thời gian thực
     (function setupGestures() {
       const panel = $('flashcardPanel');
-      let sx = 0, sy = 0, dx = 0, tracking = false, axis = null, suppressClick = false;
-      panel.addEventListener('touchstart', (e) => {
-        if (e.touches.length !== 1 || e.target.closest('button, input, select, textarea, .step-circles')) { tracking = false; return; }
-        sx = e.touches[0].clientX; sy = e.touches[0].clientY; dx = 0; axis = null; tracking = true;
-        panel.style.transition = 'none';
-      }, { passive: true });
-      panel.addEventListener('touchmove', (e) => {
-        if (!tracking) return;
-        const mx = e.touches[0].clientX - sx, my = e.touches[0].clientY - sy;
-        if (!axis && (Math.abs(mx) > 10 || Math.abs(my) > 10)) axis = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
-        if (axis === 'x') {
-          dx = mx;
-          // Live tilt: rotateY dùng transform-origin left center giống page flip
-          const angle = Math.max(-40, Math.min(40, dx / 6));
-          panel.style.transformOrigin = 'left center';
-          panel.style.transform = `perspective(900px) rotateY(${angle}deg)`;
-          panel.style.opacity = String(1 - Math.min(Math.abs(dx) / 400, 0.5));
-        }
-      }, { passive: true });
-      const end = () => {
-        if (!tracking) return;
-        tracking = false;
-        if (axis !== 'x') return;
-        suppressClick = true;
-        setTimeout(() => suppressClick = false, 400);
-        // Reset inline style trước khi goCard tự lo animation
-        panel.style.transform = '';
-        panel.style.opacity = '';
-        panel.style.transition = '';
-        panel.style.transformOrigin = '';
-        if (Math.abs(dx) > 70) {
-          if (navigator.vibrate) navigator.vibrate(8);
-          goCard(dx < 0 ? 1 : -1);
-        }
-      };
-      panel.addEventListener('touchend', end);
-      panel.addEventListener('touchcancel', end);
+      let sx = 0, sy = 0, dx = 0, touchY = 0;
+      let tracking = false, axis = null, dragging = false;
+      let activeDir = 0, targetIdx = 0;
+      let lastMoveTime = 0, lastX = 0, velocityX = 0;
 
-      // Chạm vào thẻ để lật (front/back)
+      panel.addEventListener('touchstart', (e) => {
+        if (isCurling) return;
+        if (e.touches.length !== 1 || e.target.closest('button, input, select, textarea, .step-circles')) {
+          tracking = false; return;
+        }
+        const cards = getDeckCards();
+        if (cards.length <= 1) return;
+
+        const touch = e.touches[0];
+        const rect = panel.getBoundingClientRect();
+        sx = touch.clientX;
+        sy = touch.clientY;
+        lastX = sx;
+        lastMoveTime = performance.now();
+        touchY = touch.clientY - rect.top;
+        dx = 0;
+        axis = null;
+        dragging = false;
+        tracking = true;
+        activeDir = 0;
+      }, { passive: true });
+
+      panel.addEventListener('touchmove', (e) => {
+        if (!tracking || isCurling) return;
+        const touch = e.touches[0];
+        const mx = touch.clientX - sx;
+        const my = touch.clientY - sy;
+
+        // Xác định hướng vuốt (ngang hay dọc)
+        if (!axis && (Math.abs(mx) > 10 || Math.abs(my) > 10)) {
+          axis = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
+        }
+        if (axis !== 'x') return;
+
+        dx = mx;
+        const now = performance.now();
+        const dt = now - lastMoveTime;
+        if (dt > 0) {
+          velocityX = (touch.clientX - lastX) / dt;
+          lastX = touch.clientX;
+          lastMoveTime = now;
+        }
+
+        const cards = getDeckCards();
+        const n = cards.length;
+        const W = panel.clientWidth || 360;
+        const newDir = dx < 0 ? 1 : -1;
+
+        // Bắt đầu uốn cong khi kéo ngón tay
+        if (!dragging || activeDir !== newDir) {
+          activeDir = newDir;
+          targetIdx = (currentIndex + activeDir + n) % n;
+          renderUnderlayCard(targetIdx);
+          resizeCurlCanvas();
+
+          const underlay = $('flashcardUnderlay');
+          const canvas = $('pageCurlCanvas');
+          if (underlay) underlay.style.display = 'block';
+          if (canvas) canvas.style.display = 'block';
+
+          if (activeDir > 0) {
+            panel.style.zIndex = '2';
+            if (underlay) underlay.style.zIndex = '1';
+          } else {
+            if (underlay) underlay.style.zIndex = '2';
+            panel.style.zIndex = '1';
+          }
+          dragging = true;
+        }
+
+        suppressCardClick = true;
+        const progress = Math.min(1, Math.max(0, Math.abs(dx) / (W * 0.85)));
+        drawCurlFrame(progress, activeDir, touchY);
+      }, { passive: true });
+
+      const endGesture = () => {
+        if (!tracking || isCurling) return;
+        tracking = false;
+        if (!dragging || axis !== 'x') {
+          setTimeout(() => suppressCardClick = false, 120);
+          return;
+        }
+
+        const cards = getDeckCards();
+        const n = cards.length;
+        const W = panel.clientWidth || 360;
+        const progress = Math.min(1, Math.max(0, Math.abs(dx) / (W * 0.85)));
+        const shouldComplete = progress > 0.22 || Math.abs(velocityX) > 0.35;
+
+        isCurling = true;
+        const underlay = $('flashcardUnderlay');
+        const canvas = $('pageCurlCanvas');
+        const startP = progress;
+        const targetP = shouldComplete ? 1 : 0;
+        const animDuration = Math.max(160, Math.min(350, Math.round(350 * (shouldComplete ? (1 - startP) : startP))));
+        const startTime = performance.now();
+        const ease = (t) => 1 - Math.pow(1 - t, 3);
+
+        if (shouldComplete && navigator.vibrate) navigator.vibrate(8);
+
+        function completeAnim(now) {
+          const t = Math.min(1, (now - startTime) / animDuration);
+          const currentP = startP + (targetP - startP) * ease(t);
+
+          drawCurlFrame(currentP, activeDir, touchY);
+
+          if (t < 1) {
+            requestAnimationFrame(completeAnim);
+          } else {
+            if (shouldComplete) {
+              currentIndex = targetIdx;
+              isFlipped = false;
+              renderCard();
+            }
+            // Dọn dẹp trả về trạng thái phẳng tĩnh
+            panel.style.clipPath = '';
+            if (underlay) {
+              underlay.style.clipPath = '';
+              underlay.style.display = 'none';
+              underlay.style.zIndex = '';
+            }
+            if (canvas) {
+              canvas.style.display = 'none';
+              const ctx = canvas.getContext('2d');
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            panel.style.zIndex = '';
+            isCurling = false;
+            setTimeout(() => suppressCardClick = false, 200);
+          }
+        }
+
+        requestAnimationFrame(completeAnim);
+      };
+
+      panel.addEventListener('touchend', endGesture);
+      panel.addEventListener('touchcancel', endGesture);
+
+      // Chạm để lật xem đáp án mặt trước / mặt sau (không xung đột khi vuốt)
       panel.addEventListener('click', (e) => {
-        if (suppressClick) return;
+        if (suppressCardClick || isCurling) return;
         if (e.target.closest('button, input, select, textarea, .step-circles, #frontPlaceholder')) return;
         if (window.getSelection && String(window.getSelection()).length) return;
         if (!getDeckCards()[currentIndex]) return;
