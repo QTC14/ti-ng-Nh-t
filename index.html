@@ -2064,6 +2064,8 @@
     }
 
     // ---------- GOOGLE SHEETS SYNC ----------
+    // Link Google Sheets CSV mặc định (có thể đổi trong mục 🗄 Dữ liệu)
+    const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnct0ssuMfWTSYhg0PCMJ9GO9IzL3BT3gpwMqF4nA_EJ_6yAhcXuILwYH3lfs713xlUMe6dYlDYQZ0/pub?gid=0&single=true&output=csv';
     let sheetUrl = '';
     function normalizeSheetUrl(u) {
       u = (u || '').trim();
@@ -2100,6 +2102,7 @@
         renderAll();
         refreshDataStats();
         toast(`✅ Sync xong: ${statText(stat)}`);
+        await metaSet('needFirstSync', '0');
       } catch (err) {
         console.error(err);
         toast('⚠ Sync lỗi: ' + (err.message || err));
@@ -2299,17 +2302,22 @@
         // Lần chạy đầu: chuyển dữ liệu cũ từ localStorage (nếu có), nếu không thì dùng bộ từ mặc định
         let legacy = null;
         try { legacy = JSON.parse(localStorage.getItem('soft_vocab_v1')); } catch (e) {}
-        appData = (legacy && Array.isArray(legacy.decks) && Array.isArray(legacy.cards) && legacy.decks.length)
-          ? legacy : JSON.parse(JSON.stringify(DEFAULT_DATA));
+        const hasLegacy = legacy && Array.isArray(legacy.decks) && Array.isArray(legacy.cards) && legacy.decks.length;
+        appData = hasLegacy ? legacy : JSON.parse(JSON.stringify(DEFAULT_DATA));
         await saveData();
+        // Máy chưa có dữ liệu nào -> đánh dấu cần tự Sync lần đầu
+        if (!hasLegacy) await metaSet('needFirstSync', '1');
       }
       if (applySamplePatch()) await saveData();
 
       lastId = appData.cards.reduce((m, c) => (typeof c.id === 'number' && c.id > m ? c.id : m), 0);
-      sheetUrl = (await metaGet('sheetUrl')) || '';
+      sheetUrl = (await metaGet('sheetUrl')) || DEFAULT_SHEET_URL;
       currentDeckId = appData.decks[0]?.id || '';
       currentIndex = 0;
       renderAll();
+
+      // Tự động Sync 1 lần khi mở lần đầu (nếu offline thì thử lại ở lần mở sau, đến khi thành công)
+      if ((await metaGet('needFirstSync')) === '1' && navigator.onLine) await syncSheet();
 
       if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     }
